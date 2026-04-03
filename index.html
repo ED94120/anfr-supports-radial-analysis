@@ -1,0 +1,1322 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analyse radiale supports ANFR</title>
+
+    <link
+      href="https://unpkg.com/maplibre-gl@^5.5.0/dist/maplibre-gl.css"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/maplibre-gl@^5.5.0/dist/maplibre-gl.js"></script>
+
+    <link
+      href="https://unpkg.com/carte-facile@^0.9.0/dist/carte-facile.css"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/carte-facile@^0.9.0/dist/carte-facile.js"></script>
+
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #f3f4f6;
+        color: #222;
+      }
+
+      .page {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+
+      .header {
+        padding: 12px 16px;
+        background: #ffffff;
+        border-bottom: 1px solid #d0d0d0;
+      }
+
+      .header h1 {
+        margin: 0 0 4px 0;
+        font-size: 22px;
+      }
+
+      .header p {
+        margin: 0;
+        font-size: 14px;
+        color: #555;
+      }
+
+      .main {
+        flex: 1;
+        display: flex;
+        min-height: 0;
+      }
+
+      .left-panel,
+      .right-panel {
+        width: 340px;
+        background: #ffffff;
+        border-right: 1px solid #d0d0d0;
+        box-sizing: border-box;
+        padding: 14px;
+        overflow: auto;
+      }
+
+      .right-panel {
+        border-right: none;
+        border-left: 1px solid #d0d0d0;
+        width: 380px;
+      }
+
+      .center-panel {
+        flex: 1;
+        position: relative;
+        min-width: 0;
+      }
+
+      #map {
+        width: 100%;
+        height: 100%;
+        background: #000120;
+      }
+
+      .panel-block {
+        border: 1px solid #d7d7d7;
+        background: #fafafa;
+        padding: 12px;
+        margin-bottom: 14px;
+      }
+
+      .panel-block h2 {
+        margin: 0 0 10px 0;
+        font-size: 16px;
+      }
+
+      .drop-zone {
+        border: 2px dashed #8d8d8d;
+        background: #ffffff;
+        padding: 18px;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+
+      .drop-zone.dragover {
+        background: #eef6ff;
+        border-color: #2b6cb0;
+      }
+
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 10px;
+      }
+
+      .field {
+        margin-bottom: 10px;
+      }
+
+      .field label {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 13px;
+        font-weight: bold;
+      }
+
+      .field input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        font-size: 14px;
+      }
+
+      button,
+      input[type="file"] {
+        font-size: 14px;
+      }
+
+      button {
+        padding: 8px 12px;
+        cursor: pointer;
+      }
+
+      button:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+
+      .status-box,
+      .info-box {
+        font-size: 13px;
+        line-height: 1.45;
+        white-space: pre-wrap;
+      }
+
+      .muted {
+        color: #666;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 8px;
+        background: #fff;
+      }
+
+      th,
+      td {
+        border: 1px solid #d0d0d0;
+        padding: 7px 8px;
+        text-align: left;
+        font-size: 13px;
+        vertical-align: top;
+      }
+
+      th {
+        background: #f0f0f0;
+      }
+
+      .map-overlay {
+        position: absolute;
+        top: 100px;
+        left: 10px;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid #c8c8c8;
+        padding: 8px 10px;
+        font-size: 13px;
+        max-width: 340px;
+      }
+
+      .map-overlay strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+
+      @media (max-width: 1200px) {
+        .main {
+          flex-direction: column;
+        }
+
+        .left-panel,
+        .right-panel,
+        .center-panel {
+          width: 100%;
+          border-left: none;
+          border-right: none;
+        }
+
+        .left-panel,
+        .right-panel {
+          border-bottom: 1px solid #d0d0d0;
+        }
+
+        .center-panel {
+          height: 50vh;
+        }
+      }
+
+      #fileInput {
+        display: none;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="page">
+      <div class="header">
+        <h1>Analyse radiale supports ANFR</h1>
+        <p>
+          Chargez un fichier GeoJSON local, cliquez un point sur la carte IGN,
+          définissez un rayon et un pas, puis lancez l’analyse.
+        </p>
+      </div>
+
+      <div class="main">
+        <aside class="left-panel">
+          <div class="panel-block">
+            <h2>Chargement du GeoJSON</h2>
+
+            <div class="drop-zone" id="dropZone">
+              Déposez ici un fichier GeoJSON<br />
+              <span class="muted">ou utilisez le bouton ci-dessous</span>
+            </div>
+
+            <div class="row">
+            <button id="chooseFileBtn" type="button">Choisir un fichier GeoJSON</button>
+            </div>
+            <input type="file" id="fileInput" accept=".geojson,.json" />
+
+            <div class="row">
+              <button id="resetFileBtn">Réinitialiser</button>
+            </div>
+
+            <div class="info-box" id="fileInfoBox">
+              Aucun fichier chargé.
+            </div>
+          </div>
+
+          <div class="panel-block">
+            <h2>Paramètres d’analyse</h2>
+
+            <div class="field">
+              <label for="maxRadiusInput">Rayon maximal (m)</label>
+              <input
+                type="number"
+                id="maxRadiusInput"
+                value="3000"
+                min="1"
+                step="1"
+              />
+            </div>
+
+            <div class="field">
+              <label for="stepInput">Pas radial (m)</label>
+              <input type="number" id="stepInput" value="100" min="1" step="1" />
+            </div>
+
+            <div class="row">
+              <button id="analyzeBtn" disabled>Analyser</button>
+              <button id="clearPointBtn" disabled>Effacer le point</button>
+            </div>
+
+            <div class="status-box" id="leftStatusBox">
+              Cliquez d’abord sur un point de la carte après chargement du fichier.
+            </div>
+          </div>
+
+          <div class="panel-block">
+            <h2>Actions</h2>
+
+            <div class="row">
+              <button id="openCartoradioBtn" disabled>
+                Ouvrir Cartoradio au point
+              </button>
+            </div>
+
+            <div class="row">
+              <button id="exportRingsBtn" disabled>
+                Exporter CSV des couronnes
+              </button>
+              <button id="exportNearestBtn" disabled>
+                Exporter CSV des 3 plus proches
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <section class="center-panel">
+          <div id="map"></div>
+
+          <div class="map-overlay" id="mapOverlayInfo">
+            <strong>Point d’analyse</strong>
+            Aucun point sélectionné.
+          </div>
+        </section>
+
+        <aside class="right-panel">
+          <div class="panel-block">
+            <h2>Résumé</h2>
+            <div class="info-box" id="summaryBox">
+              Aucun résultat pour l’instant.
+            </div>
+          </div>
+
+          <div class="panel-block">
+            <h2>3 supports les plus proches</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Rang</th>
+                  <th>SUP_ID</th>
+                  <th>Distance (m)</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody id="nearestTableBody">
+                <tr>
+                  <td colspan="4">Aucune donnée.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="panel-block">
+            <h2>Couronnes non nulles</h2>
+            <div class="info-box" id="ringsInfoBox">
+              Aucune analyse réalisée.
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Couronne</th>
+                  <th>Nombre de supports</th>
+                </tr>
+              </thead>
+              <tbody id="ringsTableBody">
+                <tr>
+                  <td colspan="2">Aucune donnée.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="panel-block">
+            <h2>État</h2>
+            <div class="status-box" id="rightStatusBox">
+              En attente de chargement d’un fichier GeoJSON.
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <script>
+      let map = new maplibregl.Map({
+        container: "map",
+        style: CarteFacile.mapStyles.simple,
+        maxZoom: 18.9
+      });
+
+      map.addControl(new CarteFacile.SearchControl());
+      map.addControl(new maplibregl.NavigationControl());
+      map.addControl(
+        new maplibregl.ScaleControl({
+          maxWidth: 290,
+          unit: "metric"
+        }),
+        "top-left"
+      );
+      map.addControl(new maplibregl.GeolocateControl());
+      map.addControl(new CarteFacile.MapSelectorControl());
+
+      let geojsonData = null;
+      let geoPoints = [];
+      let clickedPoint = null;
+      let analysisResult = null;
+
+      const dropZone = document.getElementById("dropZone");
+      const fileInput = document.getElementById("fileInput");
+      const resetFileBtn = document.getElementById("resetFileBtn");
+      const analyzeBtn = document.getElementById("analyzeBtn");
+      const clearPointBtn = document.getElementById("clearPointBtn");
+      const openCartoradioBtn = document.getElementById("openCartoradioBtn");
+      const exportRingsBtn = document.getElementById("exportRingsBtn");
+      const exportNearestBtn = document.getElementById("exportNearestBtn");
+      const chooseFileBtn = document.getElementById("chooseFileBtn");
+
+      const maxRadiusInput = document.getElementById("maxRadiusInput");
+      const stepInput = document.getElementById("stepInput");
+
+      const fileInfoBox = document.getElementById("fileInfoBox");
+      const leftStatusBox = document.getElementById("leftStatusBox");
+      const rightStatusBox = document.getElementById("rightStatusBox");
+      const summaryBox = document.getElementById("summaryBox");
+      const ringsInfoBox = document.getElementById("ringsInfoBox");
+      const mapOverlayInfo = document.getElementById("mapOverlayInfo");
+
+      const nearestTableBody = document.getElementById("nearestTableBody");
+      const ringsTableBody = document.getElementById("ringsTableBody");
+
+      function formatBytes(bytes) {
+        if (!Number.isFinite(bytes)) return "-";
+        if (bytes < 1024) return bytes + " octets";
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + " Ko";
+        return (bytes / (1024 * 1024)).toFixed(2) + " Mo";
+      }
+
+      function isFiniteLonLat(lon, lat) {
+        return (
+          Number.isFinite(lon) &&
+          Number.isFinite(lat) &&
+          lon >= -180 &&
+          lon <= 180 &&
+          lat >= -90 &&
+          lat <= 90
+        );
+      }
+
+      function normalizeGeoJSONPoints(data) {
+        if (
+          !data ||
+          data.type !== "FeatureCollection" ||
+          !Array.isArray(data.features)
+        ) {
+          throw new Error(
+            "Le fichier n'est pas un GeoJSON FeatureCollection valide."
+          );
+        }
+
+        const points = [];
+        let invalidCount = 0;
+
+        for (const feature of data.features) {
+          if (!feature || feature.type !== "Feature") {
+            invalidCount++;
+            continue;
+          }
+
+          if (!feature.geometry || feature.geometry.type !== "Point") {
+            invalidCount++;
+            continue;
+          }
+
+          const coords = feature.geometry.coordinates;
+          if (!Array.isArray(coords) || coords.length < 2) {
+            invalidCount++;
+            continue;
+          }
+
+          const lon = Number(coords[0]);
+          const lat = Number(coords[1]);
+
+          if (!isFiniteLonLat(lon, lat)) {
+            invalidCount++;
+            continue;
+          }
+
+          const supId = String(feature?.properties?.SUP_ID ?? "").trim();
+          if (!supId) {
+            invalidCount++;
+            continue;
+          }
+
+          points.push({
+            supId,
+            lon,
+            lat
+          });
+        }
+
+        if (points.length === 0) {
+          throw new Error(
+            "Aucun point valide avec SUP_ID n'a été trouvé dans ce GeoJSON."
+          );
+        }
+
+        return {
+          points,
+          invalidCount
+        };
+      }
+
+      async function loadGeoJSONFile(file) {
+        if (!file) return;
+
+        leftStatusBox.textContent = "Lecture du fichier GeoJSON en cours...";
+        rightStatusBox.textContent = "Chargement du fichier...";
+        fileInfoBox.textContent = "Chargement...";
+
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          const normalized = normalizeGeoJSONPoints(data);
+
+          geojsonData = data;
+          geoPoints = normalized.points;
+          clickedPoint = null;
+          analysisResult = null;
+
+          fileInfoBox.textContent =
+            "Fichier chargé : " +
+            file.name +
+            "\n" +
+            "Taille : " +
+            formatBytes(file.size) +
+            "\n" +
+            "Supports valides : " +
+            geoPoints.length +
+            "\n" +
+            "Features ignorées : " +
+            normalized.invalidCount;
+
+          leftStatusBox.textContent =
+            "Fichier chargé. Cliquez un point sur la carte.";
+          rightStatusBox.textContent = "GeoJSON chargé et prêt pour l’analyse.";
+          mapOverlayInfo.innerHTML =
+            "<strong>Point d’analyse</strong>Aucun point sélectionné.";
+
+          updateClickedPointLayer();
+          updateAnalysisCircleLayer();
+          clearNearestSupportsLayer();
+          resetAnalysisOutputs();
+          updateUiState();
+        } catch (err) {
+          geojsonData = null;
+          geoPoints = [];
+          clickedPoint = null;
+          analysisResult = null;
+
+          fileInfoBox.textContent = "Erreur de lecture : " + err.message;
+          leftStatusBox.textContent = "Le fichier n'a pas pu être chargé.";
+          rightStatusBox.textContent = "Erreur : " + err.message;
+          mapOverlayInfo.innerHTML =
+            "<strong>Point d’analyse</strong>Aucun point sélectionné.";
+
+          updateClickedPointLayer();
+          updateAnalysisCircleLayer();
+          clearNearestSupportsLayer();
+          resetAnalysisOutputs();
+          updateUiState();
+        }
+      }
+
+      function degToRad(deg) {
+        return (deg * Math.PI) / 180;
+      }
+
+      function radToDeg(rad) {
+        return (rad * 180) / Math.PI;
+      }
+
+      function haversineDistanceMeters(lon1, lat1, lon2, lat2) {
+        const R = 6371000;
+        const dLat = degToRad(lat2 - lat1);
+        const dLon = degToRad(lon2 - lon1);
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos(degToRad(lat1)) *
+            Math.cos(degToRad(lat2)) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        return R * c;
+      }
+
+      function destinationPoint(lon, lat, distanceMeters, bearingDeg) {
+        const R = 6371000;
+        const brng = degToRad(bearingDeg);
+        const lat1 = degToRad(lat);
+        const lon1 = degToRad(lon);
+        const angDist = distanceMeters / R;
+
+        const lat2 = Math.asin(
+          Math.sin(lat1) * Math.cos(angDist) +
+            Math.cos(lat1) * Math.sin(angDist) * Math.cos(brng)
+        );
+
+        const lon2 =
+          lon1 +
+          Math.atan2(
+            Math.sin(brng) * Math.sin(angDist) * Math.cos(lat1),
+            Math.cos(angDist) - Math.sin(lat1) * Math.sin(lat2)
+          );
+
+        return [radToDeg(lon2), radToDeg(lat2)];
+      }
+
+      function buildCirclePolygon(lon, lat, radiusMeters, steps = 64) {
+        const ring = [];
+
+        for (let i = 0; i <= steps; i++) {
+          const bearing = (i / steps) * 360;
+          ring.push(destinationPoint(lon, lat, radiusMeters, bearing));
+        }
+
+        return {
+          type: "Feature",
+          geometry: {
+            type: "Polygon",
+            coordinates: [ring]
+          },
+          properties: {}
+        };
+      }
+
+      function ensureAnalysisLayers() {
+        if (!map.getSource("clicked-point")) {
+          map.addSource("clicked-point", {
+            type: "geojson",
+            data: {
+              type: "FeatureCollection",
+              features: []
+            }
+          });
+        }
+
+        if (!map.getLayer("clicked-point-layer")) {
+          map.addLayer({
+            id: "clicked-point-layer",
+            type: "circle",
+            source: "clicked-point",
+            paint: {
+              "circle-radius": 6,
+              "circle-color": "#0066ff",
+              "circle-opacity": 0.95,
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#ffffff"
+            }
+          });
+        }
+
+        if (!map.getSource("analysis-circle")) {
+          map.addSource("analysis-circle", {
+            type: "geojson",
+            data: {
+              type: "FeatureCollection",
+              features: []
+            }
+          });
+        }
+
+        if (!map.getLayer("analysis-circle-fill")) {
+          map.addLayer({
+            id: "analysis-circle-fill",
+            type: "fill",
+            source: "analysis-circle",
+            paint: {
+              "fill-opacity": 0.1,
+              "fill-color": "#0066ff"
+            }
+          });
+        }
+
+        if (!map.getLayer("analysis-circle-line")) {
+          map.addLayer({
+            id: "analysis-circle-line",
+            type: "line",
+            source: "analysis-circle",
+            paint: {
+              "line-color": "#0066ff",
+              "line-width": 2
+            }
+          });
+        }
+
+        if (!map.getSource("nearest-supports")) {
+          map.addSource("nearest-supports", {
+            type: "geojson",
+            data: {
+              type: "FeatureCollection",
+              features: []
+            }
+          });
+        }
+
+        if (!map.getLayer("nearest-supports-layer")) {
+          map.addLayer({
+            id: "nearest-supports-layer",
+            type: "circle",
+            source: "nearest-supports",
+            paint: {
+              "circle-radius": 6,
+              "circle-color": "#ff0000",
+              "circle-opacity": 0.9,
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#ffffff"
+            }
+          });
+        }
+      }
+
+      function updateClickedPointLayer() {
+        if (!map.getSource("clicked-point")) return;
+
+        const data = clickedPoint
+          ? {
+              type: "FeatureCollection",
+              features: [
+                {
+                  type: "Feature",
+                  geometry: {
+                    type: "Point",
+                    coordinates: [clickedPoint.lon, clickedPoint.lat]
+                  },
+                  properties: {}
+                }
+              ]
+            }
+          : {
+              type: "FeatureCollection",
+              features: []
+            };
+
+        map.getSource("clicked-point").setData(data);
+      }
+
+      function updateAnalysisCircleLayer() {
+        if (!map.getSource("analysis-circle")) return;
+
+        if (!clickedPoint) {
+          map.getSource("analysis-circle").setData({
+            type: "FeatureCollection",
+            features: []
+          });
+          return;
+        }
+
+        const radius = Number(maxRadiusInput.value);
+        if (!Number.isFinite(radius) || radius <= 0) {
+          map.getSource("analysis-circle").setData({
+            type: "FeatureCollection",
+            features: []
+          });
+          return;
+        }
+
+        map.getSource("analysis-circle").setData({
+          type: "FeatureCollection",
+          features: [
+            buildCirclePolygon(clickedPoint.lon, clickedPoint.lat, radius, 64)
+          ]
+        });
+      }
+
+      function updateNearestSupportsLayer(nearestThree) {
+        if (!map.getSource("nearest-supports")) return;
+
+        if (!Array.isArray(nearestThree) || nearestThree.length === 0) {
+          map.getSource("nearest-supports").setData({
+            type: "FeatureCollection",
+            features: []
+          });
+          return;
+        }
+
+        const features = nearestThree.map((item) => ({
+          type: "Feature",
+          geometry: {
+            type: "Point",
+            coordinates: [item.lon, item.lat]
+          },
+          properties: {
+            SUP_ID: item.supId,
+            rank: String(item.rank),
+            distance: String(item.distance),
+            inRadius: item.inRadius ? "oui" : "non"
+          }
+        }));
+
+        map.getSource("nearest-supports").setData({
+          type: "FeatureCollection",
+          features
+        });
+      }
+
+      function clearNearestSupportsLayer() {
+        updateNearestSupportsLayer([]);
+      }
+
+      function validateAnalysisInputs() {
+        const maxRadius = Number(maxRadiusInput.value);
+        const step = Number(stepInput.value);
+
+        if (!Number.isFinite(maxRadius) || maxRadius <= 0) {
+          throw new Error(
+            "Le rayon maximal doit être un nombre strictement positif."
+          );
+        }
+
+        if (!Number.isFinite(step) || step <= 0) {
+          throw new Error(
+            "Le pas radial doit être un nombre strictement positif."
+          );
+        }
+
+        if (step > maxRadius) {
+          throw new Error(
+            "Le pas radial doit être inférieur ou égal au rayon maximal."
+          );
+        }
+
+        return {
+          maxRadius,
+          step
+        };
+      }
+
+      function analyzeAroundPoint(lon0, lat0, maxRadius, step) {
+        const ringCounts = new Map();
+        const allDistances = [];
+        let totalInRadius = 0;
+
+        for (const pt of geoPoints) {
+          const distance = haversineDistanceMeters(lon0, lat0, pt.lon, pt.lat);
+          const distanceRounded = Math.round(distance);
+
+          allDistances.push({
+            supId: pt.supId,
+            lon: pt.lon,
+            lat: pt.lat,
+            distance: distanceRounded,
+            inRadius: distance <= maxRadius
+          });
+
+          if (distance <= maxRadius) {
+            totalInRadius++;
+
+            let ringIndex = Math.floor(distance / step);
+
+            if (distance === maxRadius && maxRadius % step === 0) {
+              ringIndex = Math.max(0, ringIndex - 1);
+            }
+
+            const from = ringIndex * step;
+            const to = from + step;
+            const key = `${from}-${to}`;
+
+            ringCounts.set(key, (ringCounts.get(key) || 0) + 1);
+          }
+        }
+
+        allDistances.sort((a, b) => a.distance - b.distance);
+
+        const nearestThree = allDistances.slice(0, 3).map((item, idx) => ({
+          rank: idx + 1,
+          supId: item.supId,
+          lon: item.lon,
+          lat: item.lat,
+          distance: item.distance,
+          inRadius: item.inRadius
+        }));
+
+        const rings = Array.from(ringCounts.entries())
+          .map(([key, count]) => {
+            const [from, to] = key.split("-").map(Number);
+            return { from, to, count };
+          })
+          .sort((a, b) => a.from - b.from);
+
+        return {
+          clickedPoint: {
+            lon: lon0,
+            lat: lat0
+          },
+          maxRadius,
+          step,
+          totalInRadius,
+          nearestThree,
+          rings
+        };
+      }
+
+      function renderSummary(result) {
+        const nearestDistance =
+          result.nearestThree.length > 0
+            ? result.nearestThree[0].distance + " m"
+            : "-";
+
+        summaryBox.textContent =
+          "Point sélectionné\n" +
+          "Longitude : " +
+          result.clickedPoint.lon.toFixed(6) +
+          "\n" +
+          "Latitude  : " +
+          result.clickedPoint.lat.toFixed(6) +
+          "\n\n" +
+          "Paramètres\n" +
+          "Rayon maximal : " +
+          result.maxRadius +
+          " m\n" +
+          "Pas radial    : " +
+          result.step +
+          " m\n\n" +
+          "Résultat\n" +
+          "Supports dans le rayon : " +
+          result.totalInRadius +
+          "\n" +
+          "Support le plus proche : " +
+          nearestDistance;
+      }
+
+      function renderNearestTable(nearestThree) {
+        if (!nearestThree || nearestThree.length === 0) {
+          nearestTableBody.innerHTML =
+            `<tr><td colspan="4">Aucune donnée.</td></tr>`;
+          return;
+        }
+
+        nearestTableBody.innerHTML = nearestThree
+          .map(
+            (item) => `
+            <tr>
+              <td>${item.rank}</td>
+              <td>${item.supId}</td>
+              <td>${item.distance}</td>
+              <td>${item.inRadius ? "dans rayon" : "hors rayon"}</td>
+            </tr>
+          `
+          )
+          .join("");
+      }
+
+      function renderRingsTable(rings) {
+        if (!rings || rings.length === 0) {
+          ringsInfoBox.textContent =
+            "Aucune couronne non vide dans le rayon demandé.";
+          ringsTableBody.innerHTML =
+            `<tr><td colspan="2">Aucune donnée.</td></tr>`;
+          return;
+        }
+
+        ringsInfoBox.textContent =
+          "Nombre de couronnes non vides : " + rings.length;
+
+        ringsTableBody.innerHTML = rings
+          .map(
+            (r) => `
+            <tr>
+              <td>${r.from}–${r.to} m</td>
+              <td>${r.count}</td>
+            </tr>
+          `
+          )
+          .join("");
+      }
+
+      function renderAnalysisResult(result) {
+        renderSummary(result);
+        renderNearestTable(result.nearestThree);
+        renderRingsTable(result.rings);
+
+        rightStatusBox.textContent =
+          result.totalInRadius > 0
+            ? "Analyse terminée."
+            : "Analyse terminée. Aucun support dans le rayon demandé.";
+
+        updateNearestSupportsLayer(result.nearestThree);
+      }
+
+      function downloadTextFile(
+        content,
+        fileName,
+        mimeType = "text/plain;charset=utf-8"
+      ) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+
+        URL.revokeObjectURL(url);
+      }
+
+      function buildNearestCsv(result) {
+        const lines = [];
+        lines.push("lon_point;lat_point;sup_id;rang;distance_m;dans_rayon");
+
+        for (const item of result.nearestThree) {
+          lines.push(
+            [
+              result.clickedPoint.lon.toFixed(6),
+              result.clickedPoint.lat.toFixed(6),
+              item.supId,
+              item.rank,
+              item.distance,
+              item.inRadius ? "oui" : "non"
+            ].join(";")
+          );
+        }
+
+        return lines.join("\n");
+      }
+
+      function buildRingsCsv(result) {
+        const lines = [];
+        lines.push(
+          "lon_point;lat_point;rayon_max_m;pas_m;couronne_debut_m;couronne_fin_m;nb_supports"
+        );
+
+        for (const ring of result.rings) {
+          lines.push(
+            [
+              result.clickedPoint.lon.toFixed(6),
+              result.clickedPoint.lat.toFixed(6),
+              result.maxRadius,
+              result.step,
+              ring.from,
+              ring.to,
+              ring.count
+            ].join(";")
+          );
+        }
+
+        return lines.join("\n");
+      }
+
+      function makeExportDateTag() {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return (
+          now.getFullYear() +
+          "-" +
+          pad(now.getMonth() + 1) +
+          "-" +
+          pad(now.getDate()) +
+          "_" +
+          pad(now.getHours()) +
+          "-" +
+          pad(now.getMinutes()) +
+          "-" +
+          pad(now.getSeconds())
+        );
+      }
+
+      function updateUiState() {
+        const hasFile = geoPoints.length > 0;
+        const hasPoint = !!clickedPoint;
+        const hasResult = !!analysisResult;
+
+        analyzeBtn.disabled = !(hasFile && hasPoint);
+        clearPointBtn.disabled = !hasPoint;
+        openCartoradioBtn.disabled = !hasPoint;
+        exportRingsBtn.disabled = !hasResult;
+        exportNearestBtn.disabled = !hasResult;
+      }
+
+      function resetAnalysisOutputs() {
+        analysisResult = null;
+        summaryBox.textContent = "Aucun résultat pour l’instant.";
+        ringsInfoBox.textContent = "Aucune analyse réalisée.";
+        rightStatusBox.textContent =
+          geoPoints.length > 0
+            ? "GeoJSON chargé. En attente d’un point d’analyse."
+            : "En attente de chargement d’un fichier GeoJSON.";
+
+        nearestTableBody.innerHTML =
+          `<tr><td colspan="4">Aucune donnée.</td></tr>`;
+
+        ringsTableBody.innerHTML =
+          `<tr><td colspan="2">Aucune donnée.</td></tr>`;
+
+        clearNearestSupportsLayer();
+        updateUiState();
+      }
+
+      function resetAll() {
+        geojsonData = null;
+        geoPoints = [];
+        clickedPoint = null;
+        analysisResult = null;
+
+        fileInput.value = "";
+        fileInfoBox.textContent = "Aucun fichier chargé.";
+        leftStatusBox.textContent =
+          "Cliquez d’abord sur un point de la carte après chargement du fichier.";
+        rightStatusBox.textContent =
+          "En attente de chargement d’un fichier GeoJSON.";
+        mapOverlayInfo.innerHTML =
+          "<strong>Point d’analyse</strong>Aucun point sélectionné.";
+
+        updateClickedPointLayer();
+        updateAnalysisCircleLayer();
+        clearNearestSupportsLayer();
+        resetAnalysisOutputs();
+        updateUiState();
+      }
+
+      map.on("load", function () {
+        ensureAnalysisLayers();
+      });
+
+      map.on("style.load", function () {
+        ensureAnalysisLayers();
+        updateClickedPointLayer();
+        updateAnalysisCircleLayer();
+
+        if (analysisResult && Array.isArray(analysisResult.nearestThree)) {
+          updateNearestSupportsLayer(analysisResult.nearestThree);
+        } else {
+          clearNearestSupportsLayer();
+        }
+      });
+
+      dropZone.addEventListener("dragover", function (e) {
+        e.preventDefault();
+        dropZone.classList.add("dragover");
+      });
+
+      dropZone.addEventListener("dragleave", function () {
+        dropZone.classList.remove("dragover");
+      });
+
+      dropZone.addEventListener("drop", function (e) {
+        e.preventDefault();
+        dropZone.classList.remove("dragover");
+
+        const files = e.dataTransfer.files;
+        if (!files || files.length === 0) return;
+
+        loadGeoJSONFile(files[0]);
+      });
+
+      chooseFileBtn.addEventListener("click", function () {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener("change", function () {
+        if (!fileInput.files || fileInput.files.length === 0) return;
+        loadGeoJSONFile(fileInput.files[0]);
+      });
+
+      resetFileBtn.addEventListener("click", function () {
+        resetAll();
+      });
+
+      clearPointBtn.addEventListener("click", function () {
+        clickedPoint = null;
+        mapOverlayInfo.innerHTML =
+          "<strong>Point d’analyse</strong>Aucun point sélectionné.";
+        leftStatusBox.textContent =
+          "Point effacé. Cliquez un nouveau point sur la carte.";
+
+        updateClickedPointLayer();
+        updateAnalysisCircleLayer();
+        clearNearestSupportsLayer();
+
+        resetAnalysisOutputs();
+        updateUiState();
+      });
+
+      analyzeBtn.addEventListener("click", function () {
+        if (geoPoints.length === 0) {
+          leftStatusBox.textContent = "Veuillez charger un fichier GeoJSON.";
+          return;
+        }
+
+        if (!clickedPoint) {
+          leftStatusBox.textContent =
+            "Veuillez sélectionner un point sur la carte.";
+          return;
+        }
+
+        try {
+          const params = validateAnalysisInputs();
+
+          analysisResult = analyzeAroundPoint(
+            clickedPoint.lon,
+            clickedPoint.lat,
+            params.maxRadius,
+            params.step
+          );
+
+          renderAnalysisResult(analysisResult);
+          updateUiState();
+          leftStatusBox.textContent = "Analyse terminée.";
+        } catch (err) {
+          rightStatusBox.textContent = "Erreur : " + err.message;
+          leftStatusBox.textContent = "Analyse impossible.";
+        }
+      });
+
+      openCartoradioBtn.addEventListener("click", function () {
+        if (!clickedPoint) return;
+
+        const url =
+          "https://www.cartoradio.fr/#/cartographie/lonlat/" +
+          clickedPoint.lon +
+          "/" +
+          clickedPoint.lat;
+
+        window.open(url, "_blank", "noopener");
+      });
+
+      exportRingsBtn.addEventListener("click", function () {
+        if (!analysisResult) return;
+
+        const csv = buildRingsCsv(analysisResult);
+        const fileName =
+          "couronnes_supports_ANFR_" + makeExportDateTag() + ".csv";
+        downloadTextFile(csv, fileName, "text/csv;charset=utf-8");
+      });
+
+      exportNearestBtn.addEventListener("click", function () {
+        if (!analysisResult) return;
+
+        const csv = buildNearestCsv(analysisResult);
+        const fileName =
+          "trois_plus_proches_supports_ANFR_" +
+          makeExportDateTag() +
+          ".csv";
+        downloadTextFile(csv, fileName, "text/csv;charset=utf-8");
+      });
+
+      maxRadiusInput.addEventListener("input", function () {
+        updateAnalysisCircleLayer();
+      });
+
+      stepInput.addEventListener("input", function () {
+        // Pas de dessin direct nécessaire ici
+      });
+
+      map.on("click", function (e) {
+        if (geoPoints.length === 0) {
+          leftStatusBox.textContent = "Chargez d’abord un fichier GeoJSON.";
+          return;
+        }
+
+        clickedPoint = {
+          lon: e.lngLat.lng,
+          lat: e.lngLat.lat
+        };
+
+        mapOverlayInfo.innerHTML =
+          "<strong>Point d’analyse</strong>" +
+          "Longitude : " +
+          clickedPoint.lon.toFixed(6) +
+          "<br>" +
+          "Latitude : " +
+          clickedPoint.lat.toFixed(6);
+
+        leftStatusBox.textContent =
+          "Point sélectionné. Vous pouvez lancer l’analyse.";
+
+        updateClickedPointLayer();
+        updateAnalysisCircleLayer();
+        clearNearestSupportsLayer();
+
+        resetAnalysisOutputs();
+        updateUiState();
+      });
+
+      map.on("click", "nearest-supports-layer", function (e) {
+        const feature = e.features && e.features[0];
+        if (!feature) return;
+
+        const coords = feature.geometry.coordinates.slice();
+        const supId = feature.properties.SUP_ID || "";
+        const rank = feature.properties.rank || "";
+        const distance = feature.properties.distance || "";
+        const inRadius = feature.properties.inRadius || "";
+
+        new maplibregl.Popup({ closeButton: true })
+          .setLngLat(coords)
+          .setHTML(
+            "<strong>Support proche</strong><br>" +
+              "Rang : " +
+              rank +
+              "<br>" +
+              "SUP_ID : " +
+              supId +
+              "<br>" +
+              "Distance : " +
+              distance +
+              " m<br>" +
+              "Dans le rayon : " +
+              inRadius
+          )
+          .addTo(map);
+      });
+
+      map.on("mouseenter", "nearest-supports-layer", function () {
+        map.getCanvas().style.cursor = "pointer";
+      });
+
+      map.on("mouseleave", "nearest-supports-layer", function () {
+        map.getCanvas().style.cursor = "";
+      });
+
+      resetAll();
+    </script>
+  </body>
+</html>
