@@ -13,3 +13,9 @@ Les informations suivantes sont fournies :
 &nbsp;&nbsp;&nbsp;&nbsp;le nombre de supports localisés dans le cercle de rayon maximal,  
 &nbsp;&nbsp;&nbsp;&nbsp;le nombre de supports dans chaque rondelle,  
 &nbsp;&nbsp;&nbsp;&nbsp;la position et la distance au point des trois supports les plus proches.
+
+## Informations particulières
+
+L'application utilise un fichier au format geoJSON contenant les positions des supports.
+
+Le fichier est créé à partir des informations ANFR.
