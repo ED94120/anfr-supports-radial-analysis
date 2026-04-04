@@ -231,8 +231,9 @@
       <div class="header">
         <h1>Analyse radiale supports ANFR</h1>
         <p>
-          Chargez un fichier GeoJSON local, cliquez un point sur la carte IGN,
-          définissez un rayon et un pas, puis lancez l’analyse.
+          Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut,
+          cliquez un point sur la carte IGN, définissez un rayon et un pas,
+          puis lancez l’analyse.
         </p>
       </div>
 
@@ -243,20 +244,29 @@
 
             <div class="drop-zone" id="dropZone">
               Déposez ici un fichier GeoJSON<br />
-              <span class="muted">ou utilisez le bouton ci-dessous</span>
+              <span class="muted">ou utilisez l’un des boutons ci-dessous</span>
             </div>
 
             <div class="row">
-            <button id="chooseFileBtn" type="button">Choisir un fichier GeoJSON</button>
+              <button id="loadDefaultGeojsonBtn" type="button">
+                Utiliser le GeoJSON par défaut
+              </button>
             </div>
+
+            <div class="row">
+              <button id="chooseFileBtn" type="button">
+                Choisir un fichier GeoJSON
+              </button>
+            </div>
+
             <input type="file" id="fileInput" accept=".geojson,.json" />
 
             <div class="row">
-              <button id="resetFileBtn">Réinitialiser</button>
+              <button id="resetFileBtn" type="button">Réinitialiser</button>
             </div>
 
             <div class="info-box" id="fileInfoBox">
-              Aucun fichier chargé.
+              Aucun GeoJSON chargé.
             </div>
           </div>
 
@@ -276,7 +286,13 @@
 
             <div class="field">
               <label for="stepInput">Pas radial (m)</label>
-              <input type="number" id="stepInput" value="100" min="1" step="1" />
+              <input
+                type="number"
+                id="stepInput"
+                value="100"
+                min="1"
+                step="1"
+              />
             </div>
 
             <div class="row">
@@ -285,7 +301,8 @@
             </div>
 
             <div class="status-box" id="leftStatusBox">
-              Cliquez d’abord sur un point de la carte après chargement du fichier.
+              Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut,
+              puis cliquez un point sur la carte.
             </div>
           </div>
 
@@ -369,7 +386,7 @@
           <div class="panel-block">
             <h2>État</h2>
             <div class="status-box" id="rightStatusBox">
-              En attente de chargement d’un fichier GeoJSON.
+              En attente de chargement d’un GeoJSON.
             </div>
           </div>
         </aside>
@@ -395,10 +412,20 @@
       map.addControl(new maplibregl.GeolocateControl());
       map.addControl(new CarteFacile.MapSelectorControl());
 
+      const GEOJSON_API_URL =
+        "https://api.github.com/repos/ED94120/cartes-ign-topographie/contents/data";
+
       let geojsonData = null;
       let geoPoints = [];
       let clickedPoint = null;
       let analysisResult = null;
+
+      let activeSourceType = "none";
+      let activeSourceName = "";
+      let isLoading = false;
+
+      let latestDefaultGeoJSONName = "";
+      let latestDefaultGeoJSONUrl = "";
 
       const dropZone = document.getElementById("dropZone");
       const fileInput = document.getElementById("fileInput");
@@ -409,6 +436,9 @@
       const exportRingsBtn = document.getElementById("exportRingsBtn");
       const exportNearestBtn = document.getElementById("exportNearestBtn");
       const chooseFileBtn = document.getElementById("chooseFileBtn");
+      const loadDefaultGeojsonBtn = document.getElementById(
+        "loadDefaultGeojsonBtn"
+      );
 
       const maxRadiusInput = document.getElementById("maxRadiusInput");
       const stepInput = document.getElementById("stepInput");
@@ -505,63 +535,170 @@
         };
       }
 
-      async function loadGeoJSONFile(file) {
-        if (!file) return;
+      function renderFileInfo(sourceType, sourceName, sizeBytes, validCount, invalidCount) {
+        const lines = [];
 
-        leftStatusBox.textContent = "Lecture du fichier GeoJSON en cours...";
-        rightStatusBox.textContent = "Chargement du fichier...";
-        fileInfoBox.textContent = "Chargement...";
+        if (sourceType === "local") {
+          lines.push("Source : fichier local");
+        } else if (sourceType === "default-github") {
+          lines.push("Source : GeoJSON par défaut GitHub");
+        } else {
+          fileInfoBox.textContent = "Aucun GeoJSON chargé.";
+          return;
+        }
+
+        lines.push("Nom du fichier : " + sourceName);
+
+        if (Number.isFinite(sizeBytes)) {
+          lines.push("Taille : " + formatBytes(sizeBytes));
+        }
+
+        lines.push("Supports valides : " + validCount);
+        lines.push("Features ignorées : " + invalidCount);
+
+        fileInfoBox.textContent = lines.join("\n");
+      }
+
+      function applyLoadedGeoJSON(data, sourceType, sourceName, sizeBytes) {
+        const normalized = normalizeGeoJSONPoints(data);
+
+        geojsonData = data;
+        geoPoints = normalized.points;
+        activeSourceType = sourceType;
+        activeSourceName = sourceName;
+
+        clickedPoint = null;
+        analysisResult = null;
+
+        renderFileInfo(
+          sourceType,
+          sourceName,
+          sizeBytes,
+          geoPoints.length,
+          normalized.invalidCount
+        );
+
+        leftStatusBox.textContent = "GeoJSON chargé. Cliquez un point sur la carte.";
+        rightStatusBox.textContent = "GeoJSON prêt pour l’analyse.";
+        mapOverlayInfo.innerHTML =
+          "<strong>Point d’analyse</strong>Aucun point sélectionné.";
+
+        updateClickedPointLayer();
+        updateAnalysisCircleLayer();
+        clearNearestSupportsLayer();
+        resetAnalysisOutputs();
+        updateUiState();
+      }
+
+      async function getLatestDefaultGeoJSONMeta() {
+        if (latestDefaultGeoJSONName && latestDefaultGeoJSONUrl) {
+          return {
+            name: latestDefaultGeoJSONName,
+            downloadUrl: latestDefaultGeoJSONUrl
+          };
+        }
+
+        const prefix = "GeoJSON-support_antennes_ANFR-light-";
+        const suffix = ".geojson";
+
+        const response = await fetch(GEOJSON_API_URL);
+        if (!response.ok) {
+          throw new Error("Impossible d’interroger le dossier data sur GitHub.");
+        }
+
+        const files = await response.json();
+
+        const matches = files
+          .filter(
+            (item) =>
+              item &&
+              item.type === "file" &&
+              typeof item.name === "string" &&
+              item.name.startsWith(prefix) &&
+              item.name.endsWith(suffix)
+          )
+          .sort((a, b) => b.name.localeCompare(a.name));
+
+        if (matches.length === 0) {
+          throw new Error(
+            "Aucun GeoJSON par défaut correspondant n'a été trouvé dans le dossier data."
+          );
+        }
+
+        if (!matches[0].download_url) {
+          throw new Error("URL de téléchargement introuvable.");
+        }
+
+        latestDefaultGeoJSONName = matches[0].name;
+        latestDefaultGeoJSONUrl = matches[0].download_url;
+
+        return {
+          name: latestDefaultGeoJSONName,
+          downloadUrl: latestDefaultGeoJSONUrl
+        };
+      }
+
+      async function loadDefaultGeoJSON() {
+        if (isLoading) return;
+
+        isLoading = true;
+        updateUiState();
 
         try {
-          const text = await file.text();
-          const data = JSON.parse(text);
-          const normalized = normalizeGeoJSONPoints(data);
+          leftStatusBox.textContent =
+            "Recherche du GeoJSON par défaut le plus récent...";
+          rightStatusBox.textContent =
+            "Chargement du GeoJSON par défaut...";
 
-          geojsonData = data;
-          geoPoints = normalized.points;
-          clickedPoint = null;
-          analysisResult = null;
-
-          fileInfoBox.textContent =
-            "Fichier chargé : " +
-            file.name +
-            "\n" +
-            "Taille : " +
-            formatBytes(file.size) +
-            "\n" +
-            "Supports valides : " +
-            geoPoints.length +
-            "\n" +
-            "Features ignorées : " +
-            normalized.invalidCount;
+          const meta = await getLatestDefaultGeoJSONMeta();
 
           leftStatusBox.textContent =
-            "Fichier chargé. Cliquez un point sur la carte.";
-          rightStatusBox.textContent = "GeoJSON chargé et prêt pour l’analyse.";
-          mapOverlayInfo.innerHTML =
-            "<strong>Point d’analyse</strong>Aucun point sélectionné.";
+            "Téléchargement du GeoJSON par défaut en cours...";
 
-          updateClickedPointLayer();
-          updateAnalysisCircleLayer();
-          clearNearestSupportsLayer();
-          resetAnalysisOutputs();
-          updateUiState();
+          const response = await fetch(meta.downloadUrl);
+          if (!response.ok) {
+            throw new Error("Le téléchargement du GeoJSON par défaut a échoué.");
+          }
+
+          const text = await response.text();
+          const data = JSON.parse(text);
+
+          applyLoadedGeoJSON(
+            data,
+            "default-github",
+            meta.name,
+            new Blob([text]).size
+          );
         } catch (err) {
-          geojsonData = null;
-          geoPoints = [];
-          clickedPoint = null;
-          analysisResult = null;
-
-          fileInfoBox.textContent = "Erreur de lecture : " + err.message;
-          leftStatusBox.textContent = "Le fichier n'a pas pu être chargé.";
+          leftStatusBox.textContent =
+            "Le GeoJSON par défaut n’a pas pu être chargé.";
           rightStatusBox.textContent = "Erreur : " + err.message;
-          mapOverlayInfo.innerHTML =
-            "<strong>Point d’analyse</strong>Aucun point sélectionné.";
+        } finally {
+          isLoading = false;
+          updateUiState();
+        }
+      }
 
-          updateClickedPointLayer();
-          updateAnalysisCircleLayer();
-          clearNearestSupportsLayer();
-          resetAnalysisOutputs();
+      async function loadGeoJSONFile(file) {
+        if (!file || isLoading) return;
+
+        isLoading = true;
+        updateUiState();
+
+        try {
+          leftStatusBox.textContent =
+            "Lecture du fichier GeoJSON local en cours...";
+          rightStatusBox.textContent = "Chargement du GeoJSON local...";
+
+          const text = await file.text();
+          const data = JSON.parse(text);
+
+          applyLoadedGeoJSON(data, "local", file.name, file.size);
+        } catch (err) {
+          leftStatusBox.textContent = "Le fichier GeoJSON local n’a pas pu être chargé.";
+          rightStatusBox.textContent = "Erreur : " + err.message;
+        } finally {
+          isLoading = false;
           updateUiState();
         }
       }
@@ -946,17 +1083,30 @@
           .join("");
       }
 
-      function renderRingsTable(rings) {
+      function renderRingsTable(result) {
+        const rings = result.rings;
+
         if (!rings || rings.length === 0) {
           ringsInfoBox.textContent =
-            "Aucune couronne non vide dans le rayon demandé.";
+            "Aucune couronne non vide dans le rayon demandé.\n" +
+            "Nombre total de supports à moins de " +
+            result.maxRadius +
+            " m : " +
+            result.totalInRadius;
+
           ringsTableBody.innerHTML =
             `<tr><td colspan="2">Aucune donnée.</td></tr>`;
           return;
         }
 
         ringsInfoBox.textContent =
-          "Nombre de couronnes non vides : " + rings.length;
+          "Nombre de couronnes non vides : " +
+          rings.length +
+          "\n" +
+          "Nombre total de supports à moins de " +
+          result.maxRadius +
+          " m : " +
+          result.totalInRadius;
 
         ringsTableBody.innerHTML = rings
           .map(
@@ -973,7 +1123,7 @@
       function renderAnalysisResult(result) {
         renderSummary(result);
         renderNearestTable(result.nearestThree);
-        renderRingsTable(result.rings);
+        renderRingsTable(result);
 
         rightStatusBox.textContent =
           result.totalInRadius > 0
@@ -1063,11 +1213,27 @@
       }
 
       function updateUiState() {
-        const hasFile = geoPoints.length > 0;
+        if (isLoading) {
+          loadDefaultGeojsonBtn.disabled = true;
+          chooseFileBtn.disabled = true;
+          resetFileBtn.disabled = true;
+          analyzeBtn.disabled = true;
+          clearPointBtn.disabled = true;
+          openCartoradioBtn.disabled = true;
+          exportRingsBtn.disabled = true;
+          exportNearestBtn.disabled = true;
+          return;
+        }
+
+        const hasGeoJSON = geoPoints.length > 0;
         const hasPoint = !!clickedPoint;
         const hasResult = !!analysisResult;
 
-        analyzeBtn.disabled = !(hasFile && hasPoint);
+        loadDefaultGeojsonBtn.disabled = false;
+        chooseFileBtn.disabled = false;
+        resetFileBtn.disabled = false;
+
+        analyzeBtn.disabled = !(hasGeoJSON && hasPoint);
         clearPointBtn.disabled = !hasPoint;
         openCartoradioBtn.disabled = !hasPoint;
         exportRingsBtn.disabled = !hasResult;
@@ -1081,7 +1247,7 @@
         rightStatusBox.textContent =
           geoPoints.length > 0
             ? "GeoJSON chargé. En attente d’un point d’analyse."
-            : "En attente de chargement d’un fichier GeoJSON.";
+            : "En attente de chargement d’un GeoJSON.";
 
         nearestTableBody.innerHTML =
           `<tr><td colspan="4">Aucune donnée.</td></tr>`;
@@ -1099,12 +1265,16 @@
         clickedPoint = null;
         analysisResult = null;
 
+        activeSourceType = "none";
+        activeSourceName = "";
+        isLoading = false;
+
         fileInput.value = "";
-        fileInfoBox.textContent = "Aucun fichier chargé.";
+        fileInfoBox.textContent = "Aucun GeoJSON chargé.";
         leftStatusBox.textContent =
-          "Cliquez d’abord sur un point de la carte après chargement du fichier.";
+          "Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut, puis cliquez un point sur la carte.";
         rightStatusBox.textContent =
-          "En attente de chargement d’un fichier GeoJSON.";
+          "En attente de chargement d’un GeoJSON.";
         mapOverlayInfo.innerHTML =
           "<strong>Point d’analyse</strong>Aucun point sélectionné.";
 
@@ -1150,6 +1320,10 @@
         loadGeoJSONFile(files[0]);
       });
 
+      loadDefaultGeojsonBtn.addEventListener("click", function () {
+        loadDefaultGeoJSON();
+      });
+
       chooseFileBtn.addEventListener("click", function () {
         fileInput.click();
       });
@@ -1180,7 +1354,7 @@
 
       analyzeBtn.addEventListener("click", function () {
         if (geoPoints.length === 0) {
-          leftStatusBox.textContent = "Veuillez charger un fichier GeoJSON.";
+          leftStatusBox.textContent = "Veuillez charger un GeoJSON.";
           return;
         }
 
@@ -1251,7 +1425,7 @@
 
       map.on("click", function (e) {
         if (geoPoints.length === 0) {
-          leftStatusBox.textContent = "Chargez d’abord un fichier GeoJSON.";
+          leftStatusBox.textContent = "Chargez d’abord un GeoJSON.";
           return;
         }
 
