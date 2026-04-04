@@ -547,7 +547,8 @@
           return;
         }
 
-        lines.push("Nom du fichier : " + sourceName);
+        lines.push("Nom du fichier :");
+        lines.push(sourceName);
 
         if (Number.isFinite(sizeBytes)) {
           lines.push("Taille : " + formatBytes(sizeBytes));
