@@ -1617,13 +1617,19 @@
 
       map.on("click", "supports-in-radius-layer", function (e) {
         const feature = e.features && e.features[0];
-
+      
         if (!feature) return;
-
+      
         const coords = feature.geometry.coordinates.slice();
         const supId = feature.properties?.SUP_ID || "";
         const distance = feature.properties?.distance || "";
-
+      
+        const cartoradioUrl =
+          "https://www.cartoradio.fr/#/cartographie/lonlat/" +
+          encodeURIComponent(coords[0]) +
+          "/" +
+          encodeURIComponent(coords[1]);
+      
         new maplibregl.Popup({ closeButton: true })
           .setLngLat(coords)
           .setHTML(
@@ -1633,7 +1639,10 @@
               "<br>" +
               "Distance : " +
               distance +
-              " m"
+              " m<br>" +
+              "<a href='" +
+              cartoradioUrl +
+              "' target='_blank' rel='noopener'>Ouvrir Cartoradio sur ce support</a>"
           )
           .addTo(map);
       });
