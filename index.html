@@ -89,6 +89,7 @@
         background: #fafafa;
         padding: 12px;
         margin-bottom: 14px;
+        box-sizing: border-box;
       }
 
       .panel-block h2 {
@@ -96,17 +97,57 @@
         font-size: 16px;
       }
 
+      .input-block {
+        border: 2px solid #cc0000;
+        background: #fff8f8;
+      }
+
+      .output-zone {
+        border: 2px solid #003366;
+        background: #f6f9ff;
+        box-sizing: border-box;
+      }
+
+      .error-zone {
+        border: 2px solid #cc0000;
+        background: #fff8f8;
+        color: #cc0000;
+        box-sizing: border-box;
+      }
+
+      .primary-default-btn {
+        width: 100%;
+        margin-bottom: 14px;
+        border: 2px solid #0b7a28;
+        background: #e9f8ee;
+        color: #0b5f20;
+        font-weight: bold;
+      }
+
+      .primary-default-btn:hover {
+        background: #d4f0dc;
+      }
+
+      .subsection-title {
+        margin: 10px 0 8px 0;
+        font-size: 13px;
+        font-weight: bold;
+        color: #333;
+      }
+
       .drop-zone {
-        border: 2px dashed #8d8d8d;
-        background: #ffffff;
+        border: 2px dashed #cc0000;
+        background: #fff8f8;
+        color: #7a0000;
         padding: 18px;
         text-align: center;
         margin-bottom: 10px;
+        box-sizing: border-box;
       }
 
       .drop-zone.dragover {
-        background: #eef6ff;
-        border-color: #2b6cb0;
+        background: #ffecec;
+        border-color: #ff0000;
       }
 
       .row {
@@ -132,6 +173,8 @@
         box-sizing: border-box;
         padding: 8px;
         font-size: 14px;
+        border: 2px solid #cc0000;
+        background: #fff8f8;
       }
 
       button,
@@ -142,6 +185,13 @@
       button {
         padding: 8px 12px;
         cursor: pointer;
+        border-radius: 4px;
+        border: 1px solid #777;
+        background: #ffffff;
+      }
+
+      button:hover {
+        background: #f0f0f0;
       }
 
       button:disabled {
@@ -154,6 +204,8 @@
         font-size: 13px;
         line-height: 1.45;
         white-space: pre-wrap;
+        padding: 8px;
+        box-sizing: border-box;
       }
 
       .muted {
@@ -186,15 +238,32 @@
         left: 10px;
         z-index: 10;
         background: rgba(255, 255, 255, 0.92);
-        border: 1px solid #c8c8c8;
+        border: 2px solid #003366;
         padding: 8px 10px;
         font-size: 13px;
         max-width: 340px;
+        color: #003366;
       }
 
       .map-overlay strong {
         display: block;
         margin-bottom: 4px;
+      }
+
+      .maplibregl-ctrl input[type="text"],
+      .maplibregl-ctrl input[type="search"],
+      .carte-facile-search-control input {
+        border: 2px solid #cc0000 !important;
+        background: #fff8f8 !important;
+        box-sizing: border-box;
+      }
+
+      .maplibregl-ctrl input[type="text"]:focus,
+      .maplibregl-ctrl input[type="search"]:focus,
+      .carte-facile-search-control input:focus {
+        outline: none;
+        border-color: #ff0000 !important;
+        box-shadow: 0 0 0 2px rgba(204, 0, 0, 0.25);
       }
 
       @media (max-width: 1200px) {
@@ -231,9 +300,9 @@
       <div class="header">
         <h1>Analyse radiale supports ANFR</h1>
         <p>
-          Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut,
-          cliquez un point sur la carte IGN, définissez un rayon et un pas,
-          puis lancez l’analyse.
+          Utilisez le GeoJSON par défaut le plus récent ou chargez un GeoJSON
+          personnel, cliquez un point sur la carte IGN, définissez un rayon et
+          un pas, puis lancez l’analyse.
         </p>
       </div>
 
@@ -242,21 +311,26 @@
           <div class="panel-block">
             <h2>Chargement du GeoJSON</h2>
 
-            <div class="drop-zone" id="dropZone">
-              Déposez ici un fichier GeoJSON<br />
-              <span class="muted">ou utilisez l’un des boutons ci-dessous</span>
-            </div>
+            <button
+              id="loadDefaultGeojsonBtn"
+              type="button"
+              class="primary-default-btn"
+            >
+              Utiliser le GeoJSON par défaut
+            </button>
 
-            <div class="row">
-              <button id="loadDefaultGeojsonBtn" type="button">
-                Utiliser le GeoJSON par défaut
-              </button>
-            </div>
+            <div class="subsection-title">GeoJSON personnel</div>
 
             <div class="row">
               <button id="chooseFileBtn" type="button">
                 Choisir un fichier GeoJSON
               </button>
+            </div>
+
+            <div class="drop-zone" id="dropZone">
+              Glissez-déposez ici un fichier GeoJSON personnel
+              <br />
+              <span class="muted">Formats acceptés : .geojson ou .json</span>
             </div>
 
             <input type="file" id="fileInput" accept=".geojson,.json" />
@@ -265,12 +339,12 @@
               <button id="resetFileBtn" type="button">Réinitialiser</button>
             </div>
 
-            <div class="info-box" id="fileInfoBox">
+            <div class="info-box output-zone" id="fileInfoBox">
               Aucun GeoJSON chargé.
             </div>
           </div>
 
-          <div class="panel-block">
+          <div class="panel-block input-block">
             <h2>Paramètres d’analyse</h2>
 
             <div class="field">
@@ -300,7 +374,7 @@
               <button id="clearPointBtn" disabled>Effacer le point</button>
             </div>
 
-            <div class="status-box" id="leftStatusBox">
+            <div class="status-box output-zone" id="leftStatusBox">
               Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut,
               puis cliquez un point sur la carte.
             </div>
@@ -338,7 +412,7 @@
         <aside class="right-panel">
           <div class="panel-block">
             <h2>Résumé</h2>
-            <div class="info-box" id="summaryBox">
+            <div class="info-box output-zone" id="summaryBox">
               Aucun résultat pour l’instant.
             </div>
           </div>
@@ -364,7 +438,7 @@
 
           <div class="panel-block">
             <h2>Couronnes non nulles</h2>
-            <div class="info-box" id="ringsInfoBox">
+            <div class="info-box output-zone" id="ringsInfoBox">
               Aucune analyse réalisée.
             </div>
 
@@ -385,7 +459,7 @@
 
           <div class="panel-block">
             <h2>État</h2>
-            <div class="status-box" id="rightStatusBox">
+            <div class="status-box output-zone" id="rightStatusBox">
               En attente de chargement d’un GeoJSON.
             </div>
           </div>
@@ -402,6 +476,7 @@
 
       map.addControl(new CarteFacile.SearchControl());
       map.addControl(new maplibregl.NavigationControl());
+
       map.addControl(
         new maplibregl.ScaleControl({
           maxWidth: 290,
@@ -409,6 +484,7 @@
         }),
         "top-left"
       );
+
       map.addControl(new maplibregl.GeolocateControl());
       map.addControl(new CarteFacile.MapSelectorControl());
 
@@ -436,6 +512,7 @@
       const exportRingsBtn = document.getElementById("exportRingsBtn");
       const exportNearestBtn = document.getElementById("exportNearestBtn");
       const chooseFileBtn = document.getElementById("chooseFileBtn");
+
       const loadDefaultGeojsonBtn = document.getElementById(
         "loadDefaultGeojsonBtn"
       );
@@ -471,6 +548,11 @@
         );
       }
 
+      function getDateFromGeoJSONName(fileName) {
+        const match = fileName.match(/\d{4}-\d{2}-\d{2}/);
+        return match ? match[0] : "";
+      }
+
       function normalizeGeoJSONPoints(data) {
         if (
           !data ||
@@ -497,6 +579,7 @@
           }
 
           const coords = feature.geometry.coordinates;
+
           if (!Array.isArray(coords) || coords.length < 2) {
             invalidCount++;
             continue;
@@ -511,6 +594,7 @@
           }
 
           const supId = String(feature?.properties?.SUP_ID ?? "").trim();
+
           if (!supId) {
             invalidCount++;
             continue;
@@ -535,13 +619,20 @@
         };
       }
 
-      function renderFileInfo(sourceType, sourceName, sizeBytes, validCount, invalidCount) {
+      function renderFileInfo(
+        sourceType,
+        sourceName,
+        sizeBytes,
+        validCount,
+        invalidCount
+      ) {
         const lines = [];
 
         if (sourceType === "local") {
           lines.push("Source : fichier local");
         } else if (sourceType === "default-github") {
           lines.push("Source : GeoJSON par défaut GitHub");
+          lines.push("Sélection : fichier daté le plus récent trouvé.");
         } else {
           fileInfoBox.textContent = "Aucun GeoJSON chargé.";
           return;
@@ -579,14 +670,20 @@
           normalized.invalidCount
         );
 
-        leftStatusBox.textContent = "GeoJSON chargé. Cliquez un point sur la carte.";
-        rightStatusBox.textContent = "GeoJSON prêt pour l’analyse.";
+        leftStatusBox.textContent =
+          "GeoJSON chargé. Cliquez un point sur la carte.";
+
+        rightStatusBox.textContent =
+          "GeoJSON prêt pour l’analyse. Supports disponibles : " +
+          geoPoints.length +
+          ".";
+
         mapOverlayInfo.innerHTML =
           "<strong>Point d’analyse</strong>Aucun point sélectionné.";
 
         updateClickedPointLayer();
         updateAnalysisCircleLayer();
-        clearNearestSupportsLayer();
+        clearSupportsInRadiusLayer();
         resetAnalysisOutputs();
         updateUiState();
       }
@@ -603,6 +700,7 @@
         const suffix = ".geojson";
 
         const response = await fetch(GEOJSON_API_URL);
+
         if (!response.ok) {
           throw new Error("Impossible d’interroger le dossier data sur GitHub.");
         }
@@ -618,7 +716,11 @@
               item.name.startsWith(prefix) &&
               item.name.endsWith(suffix)
           )
-          .sort((a, b) => b.name.localeCompare(a.name));
+          .sort((a, b) => {
+            const dateA = getDateFromGeoJSONName(a.name);
+            const dateB = getDateFromGeoJSONName(b.name);
+            return dateB.localeCompare(dateA);
+          });
 
         if (matches.length === 0) {
           throw new Error(
@@ -648,15 +750,20 @@
         try {
           leftStatusBox.textContent =
             "Recherche du GeoJSON par défaut le plus récent...";
+
           rightStatusBox.textContent =
-            "Chargement du GeoJSON par défaut...";
+            "Interrogation du dossier data GitHub...";
 
           const meta = await getLatestDefaultGeoJSONMeta();
 
           leftStatusBox.textContent =
-            "Téléchargement du GeoJSON par défaut en cours...";
+            "Téléchargement du GeoJSON par défaut : " + meta.name;
+
+          rightStatusBox.textContent =
+            "Téléchargement du fichier par défaut le plus récent...";
 
           const response = await fetch(meta.downloadUrl);
+
           if (!response.ok) {
             throw new Error("Le téléchargement du GeoJSON par défaut a échoué.");
           }
@@ -673,6 +780,7 @@
         } catch (err) {
           leftStatusBox.textContent =
             "Le GeoJSON par défaut n’a pas pu être chargé.";
+
           rightStatusBox.textContent = "Erreur : " + err.message;
         } finally {
           isLoading = false;
@@ -689,6 +797,7 @@
         try {
           leftStatusBox.textContent =
             "Lecture du fichier GeoJSON local en cours...";
+
           rightStatusBox.textContent = "Chargement du GeoJSON local...";
 
           const text = await file.text();
@@ -696,7 +805,9 @@
 
           applyLoadedGeoJSON(data, "local", file.name, file.size);
         } catch (err) {
-          leftStatusBox.textContent = "Le fichier GeoJSON local n’a pas pu être chargé.";
+          leftStatusBox.textContent =
+            "Le fichier GeoJSON local n’a pas pu être chargé.";
+
           rightStatusBox.textContent = "Erreur : " + err.message;
         } finally {
           isLoading = false;
@@ -714,8 +825,10 @@
 
       function haversineDistanceMeters(lon1, lat1, lon2, lat2) {
         const R = 6371000;
+
         const dLat = degToRad(lat2 - lat1);
         const dLon = degToRad(lon2 - lon1);
+
         const a =
           Math.sin(dLat / 2) * Math.sin(dLat / 2) +
           Math.cos(degToRad(lat1)) *
@@ -724,11 +837,13 @@
             Math.sin(dLon / 2);
 
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
         return R * c;
       }
 
       function destinationPoint(lon, lat, distanceMeters, bearingDeg) {
         const R = 6371000;
+
         const brng = degToRad(bearingDeg);
         const lat1 = degToRad(lat);
         const lon1 = degToRad(lon);
@@ -749,7 +864,7 @@
         return [radToDeg(lon2), radToDeg(lat2)];
       }
 
-      function buildCirclePolygon(lon, lat, radiusMeters, steps = 64) {
+      function buildCirclePolygon(lon, lat, radiusMeters, steps = 96) {
         const ring = [];
 
         for (let i = 0; i <= steps; i++) {
@@ -768,6 +883,10 @@
       }
 
       function ensureAnalysisLayers() {
+        if (!map.isStyleLoaded()) {
+          return;
+        }
+
         if (!map.getSource("clicked-point")) {
           map.addSource("clicked-point", {
             type: "geojson",
@@ -784,7 +903,7 @@
             type: "circle",
             source: "clicked-point",
             paint: {
-              "circle-radius": 6,
+              "circle-radius": 7,
               "circle-color": "#0066ff",
               "circle-opacity": 0.95,
               "circle-stroke-width": 2,
@@ -827,8 +946,8 @@
           });
         }
 
-        if (!map.getSource("nearest-supports")) {
-          map.addSource("nearest-supports", {
+        if (!map.getSource("supports-in-radius")) {
+          map.addSource("supports-in-radius", {
             type: "geojson",
             data: {
               type: "FeatureCollection",
@@ -837,16 +956,26 @@
           });
         }
 
-        if (!map.getLayer("nearest-supports-layer")) {
+        if (!map.getLayer("supports-in-radius-layer")) {
           map.addLayer({
-            id: "nearest-supports-layer",
+            id: "supports-in-radius-layer",
             type: "circle",
-            source: "nearest-supports",
+            source: "supports-in-radius",
             paint: {
-              "circle-radius": 6,
+              "circle-radius": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                8,
+                3,
+                12,
+                5,
+                16,
+                7
+              ],
               "circle-color": "#ff0000",
               "circle-opacity": 0.9,
-              "circle-stroke-width": 2,
+              "circle-stroke-width": 1.5,
               "circle-stroke-color": "#ffffff"
             }
           });
@@ -890,6 +1019,7 @@
         }
 
         const radius = Number(maxRadiusInput.value);
+
         if (!Number.isFinite(radius) || radius <= 0) {
           map.getSource("analysis-circle").setData({
             type: "FeatureCollection",
@@ -901,44 +1031,36 @@
         map.getSource("analysis-circle").setData({
           type: "FeatureCollection",
           features: [
-            buildCirclePolygon(clickedPoint.lon, clickedPoint.lat, radius, 64)
+            buildCirclePolygon(clickedPoint.lon, clickedPoint.lat, radius, 96)
           ]
         });
       }
 
-      function updateNearestSupportsLayer(nearestThree) {
-        if (!map.getSource("nearest-supports")) return;
+      function updateSupportsInRadiusLayer(supportsInRadius) {
+        if (!map.getSource("supports-in-radius")) return;
 
-        if (!Array.isArray(nearestThree) || nearestThree.length === 0) {
-          map.getSource("nearest-supports").setData({
-            type: "FeatureCollection",
-            features: []
-          });
-          return;
-        }
+        const features = Array.isArray(supportsInRadius)
+          ? supportsInRadius.map((item) => ({
+              type: "Feature",
+              geometry: {
+                type: "Point",
+                coordinates: [item.lon, item.lat]
+              },
+              properties: {
+                SUP_ID: item.supId,
+                distance: String(item.distance)
+              }
+            }))
+          : [];
 
-        const features = nearestThree.map((item) => ({
-          type: "Feature",
-          geometry: {
-            type: "Point",
-            coordinates: [item.lon, item.lat]
-          },
-          properties: {
-            SUP_ID: item.supId,
-            rank: String(item.rank),
-            distance: String(item.distance),
-            inRadius: item.inRadius ? "oui" : "non"
-          }
-        }));
-
-        map.getSource("nearest-supports").setData({
+        map.getSource("supports-in-radius").setData({
           type: "FeatureCollection",
           features
         });
       }
 
-      function clearNearestSupportsLayer() {
-        updateNearestSupportsLayer([]);
+      function clearSupportsInRadiusLayer() {
+        updateSupportsInRadiusLayer([]);
       }
 
       function validateAnalysisInputs() {
@@ -972,21 +1094,26 @@
       function analyzeAroundPoint(lon0, lat0, maxRadius, step) {
         const ringCounts = new Map();
         const allDistances = [];
+        const supportsInRadius = [];
+
         let totalInRadius = 0;
 
         for (const pt of geoPoints) {
           const distance = haversineDistanceMeters(lon0, lat0, pt.lon, pt.lat);
           const distanceRounded = Math.round(distance);
 
-          allDistances.push({
+          const item = {
             supId: pt.supId,
             lon: pt.lon,
             lat: pt.lat,
             distance: distanceRounded,
             inRadius: distance <= maxRadius
-          });
+          };
 
-          if (distance <= maxRadius) {
+          allDistances.push(item);
+
+          if (item.inRadius) {
+            supportsInRadius.push(item);
             totalInRadius++;
 
             let ringIndex = Math.floor(distance / step);
@@ -1004,6 +1131,7 @@
         }
 
         allDistances.sort((a, b) => a.distance - b.distance);
+        supportsInRadius.sort((a, b) => a.distance - b.distance);
 
         const nearestThree = allDistances.slice(0, 3).map((item, idx) => ({
           rank: idx + 1,
@@ -1030,6 +1158,7 @@
           step,
           totalInRadius,
           nearestThree,
+          supportsInRadius,
           rings
         };
       }
@@ -1058,6 +1187,9 @@
           "Résultat\n" +
           "Supports dans le rayon : " +
           result.totalInRadius +
+          "\n" +
+          "Supports affichés sur la carte : " +
+          result.supportsInRadius.length +
           "\n" +
           "Support le plus proche : " +
           nearestDistance;
@@ -1128,10 +1260,10 @@
 
         rightStatusBox.textContent =
           result.totalInRadius > 0
-            ? "Analyse terminée."
+            ? "Analyse terminée. Toutes les antennes situées dans le cercle sont affichées sur la carte."
             : "Analyse terminée. Aucun support dans le rayon demandé.";
 
-        updateNearestSupportsLayer(result.nearestThree);
+        updateSupportsInRadiusLayer(result.supportsInRadius);
       }
 
       function downloadTextFile(
@@ -1154,6 +1286,7 @@
 
       function buildNearestCsv(result) {
         const lines = [];
+
         lines.push("lon_point;lat_point;sup_id;rang;distance_m;dans_rayon");
 
         for (const item of result.nearestThree) {
@@ -1174,6 +1307,7 @@
 
       function buildRingsCsv(result) {
         const lines = [];
+
         lines.push(
           "lon_point;lat_point;rayon_max_m;pas_m;couronne_debut_m;couronne_fin_m;nb_supports"
         );
@@ -1198,6 +1332,7 @@
       function makeExportDateTag() {
         const now = new Date();
         const pad = (n) => String(n).padStart(2, "0");
+
         return (
           now.getFullYear() +
           "-" +
@@ -1243,8 +1378,10 @@
 
       function resetAnalysisOutputs() {
         analysisResult = null;
+
         summaryBox.textContent = "Aucun résultat pour l’instant.";
         ringsInfoBox.textContent = "Aucune analyse réalisée.";
+
         rightStatusBox.textContent =
           geoPoints.length > 0
             ? "GeoJSON chargé. En attente d’un point d’analyse."
@@ -1256,7 +1393,7 @@
         ringsTableBody.innerHTML =
           `<tr><td colspan="2">Aucune donnée.</td></tr>`;
 
-        clearNearestSupportsLayer();
+        clearSupportsInRadiusLayer();
         updateUiState();
       }
 
@@ -1272,16 +1409,19 @@
 
         fileInput.value = "";
         fileInfoBox.textContent = "Aucun GeoJSON chargé.";
+
         leftStatusBox.textContent =
           "Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut, puis cliquez un point sur la carte.";
+
         rightStatusBox.textContent =
           "En attente de chargement d’un GeoJSON.";
+
         mapOverlayInfo.innerHTML =
           "<strong>Point d’analyse</strong>Aucun point sélectionné.";
 
         updateClickedPointLayer();
         updateAnalysisCircleLayer();
-        clearNearestSupportsLayer();
+        clearSupportsInRadiusLayer();
         resetAnalysisOutputs();
         updateUiState();
       }
@@ -1295,10 +1435,13 @@
         updateClickedPointLayer();
         updateAnalysisCircleLayer();
 
-        if (analysisResult && Array.isArray(analysisResult.nearestThree)) {
-          updateNearestSupportsLayer(analysisResult.nearestThree);
+        if (
+          analysisResult &&
+          Array.isArray(analysisResult.supportsInRadius)
+        ) {
+          updateSupportsInRadiusLayer(analysisResult.supportsInRadius);
         } else {
-          clearNearestSupportsLayer();
+          clearSupportsInRadiusLayer();
         }
       });
 
@@ -1316,6 +1459,7 @@
         dropZone.classList.remove("dragover");
 
         const files = e.dataTransfer.files;
+
         if (!files || files.length === 0) return;
 
         loadGeoJSONFile(files[0]);
@@ -1331,6 +1475,7 @@
 
       fileInput.addEventListener("change", function () {
         if (!fileInput.files || fileInput.files.length === 0) return;
+
         loadGeoJSONFile(fileInput.files[0]);
       });
 
@@ -1340,14 +1485,16 @@
 
       clearPointBtn.addEventListener("click", function () {
         clickedPoint = null;
+
         mapOverlayInfo.innerHTML =
           "<strong>Point d’analyse</strong>Aucun point sélectionné.";
+
         leftStatusBox.textContent =
           "Point effacé. Cliquez un nouveau point sur la carte.";
 
         updateClickedPointLayer();
         updateAnalysisCircleLayer();
-        clearNearestSupportsLayer();
+        clearSupportsInRadiusLayer();
 
         resetAnalysisOutputs();
         updateUiState();
@@ -1389,9 +1536,9 @@
 
         const url =
           "https://www.cartoradio.fr/#/cartographie/lonlat/" +
-          clickedPoint.lon +
+          encodeURIComponent(clickedPoint.lon) +
           "/" +
-          clickedPoint.lat;
+          encodeURIComponent(clickedPoint.lat);
 
         window.open(url, "_blank", "noopener");
       });
@@ -1402,6 +1549,7 @@
         const csv = buildRingsCsv(analysisResult);
         const fileName =
           "couronnes_supports_ANFR_" + makeExportDateTag() + ".csv";
+
         downloadTextFile(csv, fileName, "text/csv;charset=utf-8");
       });
 
@@ -1413,15 +1561,28 @@
           "trois_plus_proches_supports_ANFR_" +
           makeExportDateTag() +
           ".csv";
+
         downloadTextFile(csv, fileName, "text/csv;charset=utf-8");
       });
 
       maxRadiusInput.addEventListener("input", function () {
         updateAnalysisCircleLayer();
+
+        if (analysisResult) {
+          clearSupportsInRadiusLayer();
+          resetAnalysisOutputs();
+          leftStatusBox.textContent =
+            "Paramètre modifié. Relancez l’analyse.";
+        }
       });
 
       stepInput.addEventListener("input", function () {
-        // Pas de dessin direct nécessaire ici
+        if (analysisResult) {
+          clearSupportsInRadiusLayer();
+          resetAnalysisOutputs();
+          leftStatusBox.textContent =
+            "Paramètre modifié. Relancez l’analyse.";
+        }
       });
 
       map.on("click", function (e) {
@@ -1448,46 +1609,40 @@
 
         updateClickedPointLayer();
         updateAnalysisCircleLayer();
-        clearNearestSupportsLayer();
+        clearSupportsInRadiusLayer();
 
         resetAnalysisOutputs();
         updateUiState();
       });
 
-      map.on("click", "nearest-supports-layer", function (e) {
+      map.on("click", "supports-in-radius-layer", function (e) {
         const feature = e.features && e.features[0];
+
         if (!feature) return;
 
         const coords = feature.geometry.coordinates.slice();
-        const supId = feature.properties.SUP_ID || "";
-        const rank = feature.properties.rank || "";
-        const distance = feature.properties.distance || "";
-        const inRadius = feature.properties.inRadius || "";
+        const supId = feature.properties?.SUP_ID || "";
+        const distance = feature.properties?.distance || "";
 
         new maplibregl.Popup({ closeButton: true })
           .setLngLat(coords)
           .setHTML(
-            "<strong>Support proche</strong><br>" +
-              "Rang : " +
-              rank +
-              "<br>" +
+            "<strong>Support dans le cercle</strong><br>" +
               "SUP_ID : " +
               supId +
               "<br>" +
               "Distance : " +
               distance +
-              " m<br>" +
-              "Dans le rayon : " +
-              inRadius
+              " m"
           )
           .addTo(map);
       });
 
-      map.on("mouseenter", "nearest-supports-layer", function () {
+      map.on("mouseenter", "supports-in-radius-layer", function () {
         map.getCanvas().style.cursor = "pointer";
       });
 
-      map.on("mouseleave", "nearest-supports-layer", function () {
+      map.on("mouseleave", "supports-in-radius-layer", function () {
         map.getCanvas().style.cursor = "";
       });
 
