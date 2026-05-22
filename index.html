@@ -199,6 +199,17 @@
         cursor: not-allowed;
       }
 
+      #selectCenterBtn {
+        border: 2px solid #0b7a28;
+        background: #e9f8ee;
+        color: #0b5f20;
+        font-weight: bold;
+      }
+
+      #selectCenterBtn:hover {
+        background: #d4f0dc;
+      }
+
       .status-box,
       .info-box {
         font-size: 13px;
@@ -301,8 +312,8 @@
         <h1>Analyse radiale supports ANFR</h1>
         <p>
           Utilisez le GeoJSON par défaut le plus récent ou chargez un GeoJSON
-          personnel, cliquez un point sur la carte IGN, définissez un rayon et
-          un pas, puis lancez l’analyse.
+          personnel, définissez un point central, choisissez les paramètres,
+          puis lancez l’analyse.
         </p>
       </div>
 
@@ -369,14 +380,30 @@
               />
             </div>
 
+            <div class="field">
+              <label for="minHeightInput">
+                Hauteur minimale du support affiché (m)
+              </label>
+              <input
+                type="number"
+                id="minHeightInput"
+                value="0"
+                min="0"
+                step="0.1"
+              />
+            </div>
+
             <div class="row">
+              <button id="selectCenterBtn" disabled>
+                Définir / changer le point central
+              </button>
               <button id="analyzeBtn" disabled>Analyser</button>
               <button id="clearPointBtn" disabled>Effacer le point</button>
             </div>
 
             <div class="status-box output-zone" id="leftStatusBox">
               Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut,
-              puis cliquez un point sur la carte.
+              puis cliquez sur « Définir / changer le point central ».
             </div>
           </div>
 
@@ -385,7 +412,7 @@
 
             <div class="row">
               <button id="openCartoradioBtn" disabled>
-                Ouvrir Cartoradio au point
+                Ouvrir Cartoradio au point central
               </button>
             </div>
 
@@ -418,19 +445,20 @@
           </div>
 
           <div class="panel-block">
-            <h2>3 supports les plus proches</h2>
+            <h2>3 supports les plus proches après filtre</h2>
             <table>
               <thead>
                 <tr>
                   <th>Rang</th>
                   <th>SUP_ID</th>
                   <th>Distance (m)</th>
+                  <th>Hauteur (m)</th>
                   <th>Statut</th>
                 </tr>
               </thead>
               <tbody id="nearestTableBody">
                 <tr>
-                  <td colspan="4">Aucune donnée.</td>
+                  <td colspan="5">Aucune donnée.</td>
                 </tr>
               </tbody>
             </table>
@@ -495,6 +523,7 @@
       let geoPoints = [];
       let clickedPoint = null;
       let analysisResult = null;
+      let centerSelectionMode = false;
 
       let activeSourceType = "none";
       let activeSourceName = "";
@@ -508,6 +537,7 @@
       const resetFileBtn = document.getElementById("resetFileBtn");
       const analyzeBtn = document.getElementById("analyzeBtn");
       const clearPointBtn = document.getElementById("clearPointBtn");
+      const selectCenterBtn = document.getElementById("selectCenterBtn");
       const openCartoradioBtn = document.getElementById("openCartoradioBtn");
       const exportRingsBtn = document.getElementById("exportRingsBtn");
       const exportNearestBtn = document.getElementById("exportNearestBtn");
@@ -519,6 +549,7 @@
 
       const maxRadiusInput = document.getElementById("maxRadiusInput");
       const stepInput = document.getElementById("stepInput");
+      const minHeightInput = document.getElementById("minHeightInput");
 
       const fileInfoBox = document.getElementById("fileInfoBox");
       const leftStatusBox = document.getElementById("leftStatusBox");
@@ -548,6 +579,25 @@
         );
       }
 
+      function parseSupportHeight(value) {
+        if (value === null || value === undefined) {
+          return null;
+        }
+
+        const txt = String(value).trim().replace(",", ".");
+
+        if (txt === "") {
+          return null;
+        }
+
+        const n = Number(txt);
+        return Number.isFinite(n) ? n : null;
+      }
+
+      function formatHeight(value) {
+        return value === null || value === undefined ? "-" : String(value);
+      }
+
       function getDateFromGeoJSONName(fileName) {
         const match = fileName.match(/\d{4}-\d{2}-\d{2}/);
         return match ? match[0] : "";
@@ -566,6 +616,7 @@
 
         const points = [];
         let invalidCount = 0;
+        let withoutHeightCount = 0;
 
         for (const feature of data.features) {
           if (!feature || feature.type !== "Feature") {
@@ -600,10 +651,19 @@
             continue;
           }
 
+          const supportHeight = parseSupportHeight(
+            feature?.properties?.SUP_NM_HAUT
+          );
+
+          if (supportHeight === null) {
+            withoutHeightCount++;
+          }
+
           points.push({
             supId,
             lon,
-            lat
+            lat,
+            supportHeight
           });
         }
 
@@ -615,7 +675,8 @@
 
         return {
           points,
-          invalidCount
+          invalidCount,
+          withoutHeightCount
         };
       }
 
@@ -624,7 +685,8 @@
         sourceName,
         sizeBytes,
         validCount,
-        invalidCount
+        invalidCount,
+        withoutHeightCount
       ) {
         const lines = [];
 
@@ -646,6 +708,7 @@
         }
 
         lines.push("Supports valides : " + validCount);
+        lines.push("Supports sans hauteur : " + withoutHeightCount);
         lines.push("Features ignorées : " + invalidCount);
 
         fileInfoBox.textContent = lines.join("\n");
@@ -661,17 +724,19 @@
 
         clickedPoint = null;
         analysisResult = null;
+        centerSelectionMode = false;
 
         renderFileInfo(
           sourceType,
           sourceName,
           sizeBytes,
           geoPoints.length,
-          normalized.invalidCount
+          normalized.invalidCount,
+          normalized.withoutHeightCount
         );
 
         leftStatusBox.textContent =
-          "GeoJSON chargé. Cliquez un point sur la carte.";
+          "GeoJSON chargé. Cliquez sur « Définir / changer le point central », puis cliquez sur la carte.";
 
         rightStatusBox.textContent =
           "GeoJSON prêt pour l’analyse. Supports disponibles : " +
@@ -1048,7 +1113,9 @@
               },
               properties: {
                 SUP_ID: item.supId,
-                distance: String(item.distance)
+                distance: String(item.distance),
+                supportHeight:
+                  item.supportHeight === null ? "" : String(item.supportHeight)
               }
             }))
           : [];
@@ -1066,6 +1133,7 @@
       function validateAnalysisInputs() {
         const maxRadius = Number(maxRadiusInput.value);
         const step = Number(stepInput.value);
+        const minHeight = Number(minHeightInput.value);
 
         if (!Number.isFinite(maxRadius) || maxRadius <= 0) {
           throw new Error(
@@ -1085,29 +1153,62 @@
           );
         }
 
+        if (!Number.isFinite(minHeight) || minHeight < 0) {
+          throw new Error(
+            "La hauteur minimale doit être un nombre positif ou nul."
+          );
+        }
+
         return {
           maxRadius,
-          step
+          step,
+          minHeight
         };
       }
 
-      function analyzeAroundPoint(lon0, lat0, maxRadius, step) {
+      function analyzeAroundPoint(lon0, lat0, maxRadius, step, minHeight) {
         const ringCounts = new Map();
         const allDistances = [];
         const supportsInRadius = [];
 
+        let totalInRadiusBeforeHeightFilter = 0;
         let totalInRadius = 0;
+        let supportsExcludedByHeight = 0;
+        let supportsExcludedByUnknownHeight = 0;
 
         for (const pt of geoPoints) {
           const distance = haversineDistanceMeters(lon0, lat0, pt.lon, pt.lat);
           const distanceRounded = Math.round(distance);
+          const inRadius = distance <= maxRadius;
+
+          if (inRadius) {
+            totalInRadiusBeforeHeightFilter++;
+          }
+
+          const heightKnown = pt.supportHeight !== null;
+          const heightOk =
+            minHeight <= 0 ||
+            (heightKnown && pt.supportHeight >= minHeight);
+
+          if (inRadius && !heightOk) {
+            if (heightKnown) {
+              supportsExcludedByHeight++;
+            } else {
+              supportsExcludedByUnknownHeight++;
+            }
+          }
+
+          if (!heightOk) {
+            continue;
+          }
 
           const item = {
             supId: pt.supId,
             lon: pt.lon,
             lat: pt.lat,
+            supportHeight: pt.supportHeight,
             distance: distanceRounded,
-            inRadius: distance <= maxRadius
+            inRadius
           };
 
           allDistances.push(item);
@@ -1138,6 +1239,7 @@
           supId: item.supId,
           lon: item.lon,
           lat: item.lat,
+          supportHeight: item.supportHeight,
           distance: item.distance,
           inRadius: item.inRadius
         }));
@@ -1156,7 +1258,11 @@
           },
           maxRadius,
           step,
+          minHeight,
+          totalInRadiusBeforeHeightFilter,
           totalInRadius,
+          supportsExcludedByHeight,
+          supportsExcludedByUnknownHeight,
           nearestThree,
           supportsInRadius,
           rings
@@ -1183,22 +1289,34 @@
           " m\n" +
           "Pas radial    : " +
           result.step +
+          " m\n" +
+          "Hauteur min.  : " +
+          result.minHeight +
           " m\n\n" +
           "Résultat\n" +
-          "Supports dans le rayon : " +
+          "Supports dans le rayon avant filtre hauteur : " +
+          result.totalInRadiusBeforeHeightFilter +
+          "\n" +
+          "Supports dans le rayon après filtre hauteur : " +
           result.totalInRadius +
+          "\n" +
+          "Supports exclus car trop bas : " +
+          result.supportsExcludedByHeight +
+          "\n" +
+          "Supports exclus car hauteur inconnue : " +
+          result.supportsExcludedByUnknownHeight +
           "\n" +
           "Supports affichés sur la carte : " +
           result.supportsInRadius.length +
           "\n" +
-          "Support le plus proche : " +
+          "Support le plus proche après filtre : " +
           nearestDistance;
       }
 
       function renderNearestTable(nearestThree) {
         if (!nearestThree || nearestThree.length === 0) {
           nearestTableBody.innerHTML =
-            `<tr><td colspan="4">Aucune donnée.</td></tr>`;
+            `<tr><td colspan="5">Aucune donnée.</td></tr>`;
           return;
         }
 
@@ -1209,6 +1327,7 @@
               <td>${item.rank}</td>
               <td>${item.supId}</td>
               <td>${item.distance}</td>
+              <td>${formatHeight(item.supportHeight)}</td>
               <td>${item.inRadius ? "dans rayon" : "hors rayon"}</td>
             </tr>
           `
@@ -1221,10 +1340,10 @@
 
         if (!rings || rings.length === 0) {
           ringsInfoBox.textContent =
-            "Aucune couronne non vide dans le rayon demandé.\n" +
+            "Aucune couronne non vide dans le rayon demandé après filtre hauteur.\n" +
             "Nombre total de supports à moins de " +
             result.maxRadius +
-            " m : " +
+            " m après filtre hauteur : " +
             result.totalInRadius;
 
           ringsTableBody.innerHTML =
@@ -1238,7 +1357,7 @@
           "\n" +
           "Nombre total de supports à moins de " +
           result.maxRadius +
-          " m : " +
+          " m après filtre hauteur : " +
           result.totalInRadius;
 
         ringsTableBody.innerHTML = rings
@@ -1260,8 +1379,8 @@
 
         rightStatusBox.textContent =
           result.totalInRadius > 0
-            ? "Analyse terminée. Toutes les antennes situées dans le cercle sont affichées sur la carte."
-            : "Analyse terminée. Aucun support dans le rayon demandé.";
+            ? "Analyse terminée. Les supports dans le cercle respectant la hauteur minimale sont affichés sur la carte."
+            : "Analyse terminée. Aucun support dans le rayon demandé après filtre hauteur.";
 
         updateSupportsInRadiusLayer(result.supportsInRadius);
       }
@@ -1287,7 +1406,9 @@
       function buildNearestCsv(result) {
         const lines = [];
 
-        lines.push("lon_point;lat_point;sup_id;rang;distance_m;dans_rayon");
+        lines.push(
+          "lon_point;lat_point;sup_id;rang;distance_m;hauteur_support_m;dans_rayon"
+        );
 
         for (const item of result.nearestThree) {
           lines.push(
@@ -1297,6 +1418,7 @@
               item.supId,
               item.rank,
               item.distance,
+              item.supportHeight === null ? "" : item.supportHeight,
               item.inRadius ? "oui" : "non"
             ].join(";")
           );
@@ -1309,7 +1431,7 @@
         const lines = [];
 
         lines.push(
-          "lon_point;lat_point;rayon_max_m;pas_m;couronne_debut_m;couronne_fin_m;nb_supports"
+          "lon_point;lat_point;rayon_max_m;pas_m;hauteur_min_m;couronne_debut_m;couronne_fin_m;nb_supports"
         );
 
         for (const ring of result.rings) {
@@ -1319,6 +1441,7 @@
               result.clickedPoint.lat.toFixed(6),
               result.maxRadius,
               result.step,
+              result.minHeight,
               ring.from,
               ring.to,
               ring.count
@@ -1353,6 +1476,7 @@
           loadDefaultGeojsonBtn.disabled = true;
           chooseFileBtn.disabled = true;
           resetFileBtn.disabled = true;
+          selectCenterBtn.disabled = true;
           analyzeBtn.disabled = true;
           clearPointBtn.disabled = true;
           openCartoradioBtn.disabled = true;
@@ -1369,6 +1493,7 @@
         chooseFileBtn.disabled = false;
         resetFileBtn.disabled = false;
 
+        selectCenterBtn.disabled = !hasGeoJSON;
         analyzeBtn.disabled = !(hasGeoJSON && hasPoint);
         clearPointBtn.disabled = !hasPoint;
         openCartoradioBtn.disabled = !hasPoint;
@@ -1384,11 +1509,11 @@
 
         rightStatusBox.textContent =
           geoPoints.length > 0
-            ? "GeoJSON chargé. En attente d’un point d’analyse."
+            ? "GeoJSON chargé. En attente d’un point central."
             : "En attente de chargement d’un GeoJSON.";
 
         nearestTableBody.innerHTML =
-          `<tr><td colspan="4">Aucune donnée.</td></tr>`;
+          `<tr><td colspan="5">Aucune donnée.</td></tr>`;
 
         ringsTableBody.innerHTML =
           `<tr><td colspan="2">Aucune donnée.</td></tr>`;
@@ -1402,6 +1527,7 @@
         geoPoints = [];
         clickedPoint = null;
         analysisResult = null;
+        centerSelectionMode = false;
 
         activeSourceType = "none";
         activeSourceName = "";
@@ -1411,7 +1537,7 @@
         fileInfoBox.textContent = "Aucun GeoJSON chargé.";
 
         leftStatusBox.textContent =
-          "Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut, puis cliquez un point sur la carte.";
+          "Chargez un fichier GeoJSON local ou utilisez le GeoJSON par défaut, puis cliquez sur « Définir / changer le point central ».";
 
         rightStatusBox.textContent =
           "En attente de chargement d’un GeoJSON.";
@@ -1483,14 +1609,27 @@
         resetAll();
       });
 
+      selectCenterBtn.addEventListener("click", function () {
+        if (geoPoints.length === 0) {
+          leftStatusBox.textContent = "Chargez d’abord un GeoJSON.";
+          return;
+        }
+
+        centerSelectionMode = true;
+
+        leftStatusBox.textContent =
+          "Mode sélection du centre actif : cliquez sur la carte pour définir le point central.";
+      });
+
       clearPointBtn.addEventListener("click", function () {
         clickedPoint = null;
+        centerSelectionMode = false;
 
         mapOverlayInfo.innerHTML =
           "<strong>Point d’analyse</strong>Aucun point sélectionné.";
 
         leftStatusBox.textContent =
-          "Point effacé. Cliquez un nouveau point sur la carte.";
+          "Point central effacé. Cliquez sur « Définir / changer le point central » pour en choisir un nouveau.";
 
         updateClickedPointLayer();
         updateAnalysisCircleLayer();
@@ -1508,7 +1647,7 @@
 
         if (!clickedPoint) {
           leftStatusBox.textContent =
-            "Veuillez sélectionner un point sur la carte.";
+            "Veuillez sélectionner un point central.";
           return;
         }
 
@@ -1519,7 +1658,8 @@
             clickedPoint.lon,
             clickedPoint.lat,
             params.maxRadius,
-            params.step
+            params.step,
+            params.minHeight
           );
 
           renderAnalysisResult(analysisResult);
@@ -1572,7 +1712,7 @@
           clearSupportsInRadiusLayer();
           resetAnalysisOutputs();
           leftStatusBox.textContent =
-            "Paramètre modifié. Relancez l’analyse.";
+            "Rayon modifié. Relancez l’analyse.";
         }
       });
 
@@ -1581,7 +1721,16 @@
           clearSupportsInRadiusLayer();
           resetAnalysisOutputs();
           leftStatusBox.textContent =
-            "Paramètre modifié. Relancez l’analyse.";
+            "Pas radial modifié. Relancez l’analyse.";
+        }
+      });
+
+      minHeightInput.addEventListener("input", function () {
+        if (analysisResult) {
+          clearSupportsInRadiusLayer();
+          resetAnalysisOutputs();
+          leftStatusBox.textContent =
+            "Hauteur minimale modifiée. Relancez l’analyse.";
         }
       });
 
@@ -1591,10 +1740,26 @@
           return;
         }
 
+        const clickedSupports = map.queryRenderedFeatures(e.point, {
+          layers: ["supports-in-radius-layer"]
+        });
+
+        if (clickedSupports.length > 0) {
+          return;
+        }
+
+        if (!centerSelectionMode) {
+          leftStatusBox.textContent =
+            "Cliquez d’abord sur « Définir / changer le point central » pour déplacer le centre.";
+          return;
+        }
+
         clickedPoint = {
           lon: e.lngLat.lng,
           lat: e.lngLat.lat
         };
+
+        centerSelectionMode = false;
 
         mapOverlayInfo.innerHTML =
           "<strong>Point d’analyse</strong>" +
@@ -1605,7 +1770,7 @@
           clickedPoint.lat.toFixed(6);
 
         leftStatusBox.textContent =
-          "Point sélectionné. Vous pouvez lancer l’analyse.";
+          "Point central défini. Vous pouvez lancer l’analyse.";
 
         updateClickedPointLayer();
         updateAnalysisCircleLayer();
@@ -1616,26 +1781,34 @@
       });
 
       map.on("click", "supports-in-radius-layer", function (e) {
+        if (e.originalEvent) {
+          e.originalEvent.stopPropagation();
+        }
+
         const feature = e.features && e.features[0];
-      
+
         if (!feature) return;
-      
+
         const coords = feature.geometry.coordinates.slice();
         const supId = feature.properties?.SUP_ID || "";
         const distance = feature.properties?.distance || "";
-      
+        const supportHeight = feature.properties?.supportHeight || "";
+
         const cartoradioUrl =
           "https://www.cartoradio.fr/#/cartographie/lonlat/" +
           encodeURIComponent(coords[0]) +
           "/" +
           encodeURIComponent(coords[1]);
-      
+
         new maplibregl.Popup({ closeButton: true })
           .setLngLat(coords)
           .setHTML(
             "<strong>Support dans le cercle</strong><br>" +
               "SUP_ID : " +
               supId +
+              "<br>" +
+              "Hauteur support : " +
+              (supportHeight ? supportHeight + " m" : "non renseignée") +
               "<br>" +
               "Distance : " +
               distance +
