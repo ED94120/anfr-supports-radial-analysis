@@ -279,6 +279,40 @@
         box-shadow: 0 0 0 2px rgba(204, 0, 0, 0.25);
       }
 
+
+
+      .collapsible-block {
+        padding: 0;
+      }
+
+      .collapsible-block summary {
+        padding: 12px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        list-style-position: inside;
+        background: #fafafa;
+      }
+
+      .collapsible-block summary:hover {
+        background: #f0f0f0;
+      }
+
+      .collapsible-block table,
+      .collapsible-block .info-box {
+        margin-left: 12px;
+        margin-right: 12px;
+        width: calc(100% - 24px);
+      }
+
+      .collapsible-block table {
+        margin-bottom: 12px;
+      }
+
+      .collapsible-block .info-box {
+        margin-bottom: 10px;
+      }
+
       @media (max-width: 1200px) {
         .main {
           flex-direction: column;
@@ -452,8 +486,8 @@
             </div>
           </div>
 
-          <div class="panel-block">
-            <h2>3 supports les plus proches après filtre</h2>
+          <details class="panel-block collapsible-block">
+            <summary>3 supports les plus proches après filtre</summary>
             <table>
               <thead>
                 <tr>
@@ -470,10 +504,10 @@
                 </tr>
               </tbody>
             </table>
-          </div>
+          </details>
 
-          <div class="panel-block">
-            <h2>Couronnes non nulles</h2>
+          <details class="panel-block collapsible-block">
+            <summary>Couronnes non nulles</summary>
             <div class="info-box output-zone" id="ringsInfoBox">
               Aucune analyse réalisée.
             </div>
@@ -491,7 +525,7 @@
                 </tr>
               </tbody>
             </table>
-          </div>
+          </details>
 
           <div class="panel-block">
             <h2>État</h2>
@@ -607,6 +641,47 @@
 
       function formatHeight(value) {
         return value === null || value === undefined ? "-" : String(value);
+      }
+
+      function formatHeightStat(value) {
+        return value === null || value === undefined ? "-" : value.toFixed(2);
+      }
+
+      function computeHeightStats(items) {
+        const heights = items
+          .map((item) => item.supportHeight)
+          .filter((h) => Number.isFinite(h))
+          .sort((a, b) => a - b);
+
+        if (heights.length === 0) {
+          return {
+            median: null,
+            mean: null,
+            min: null,
+            max: null,
+            stdDev: null
+          };
+        }
+
+        const n = heights.length;
+        const sum = heights.reduce((acc, h) => acc + h, 0);
+        const mean = sum / n;
+
+        const median =
+          n % 2 === 1
+            ? heights[(n - 1) / 2]
+            : (heights[n / 2 - 1] + heights[n / 2]) / 2;
+
+        const variance =
+          heights.reduce((acc, h) => acc + Math.pow(h - mean, 2), 0) / n;
+
+        return {
+          median,
+          mean,
+          min: heights[0],
+          max: heights[n - 1],
+          stdDev: Math.sqrt(variance)
+        };
       }
 
       function getDateFromGeoJSONName(fileName) {
@@ -1289,6 +1364,8 @@
           })
           .sort((a, b) => a.from - b.from);
 
+        const heightStats = computeHeightStats(supportsInRadius);
+
         return {
           clickedPoint: {
             lon: lon0,
@@ -1303,6 +1380,7 @@
           supportsExcludedByUnknownHeight,
           nearestThree,
           supportsInRadius,
+          heightStats,
           rings
         };
       }
@@ -1348,7 +1426,28 @@
           result.supportsInRadius.length +
           "\n" +
           "Support le plus proche après filtre : " +
-          nearestDistance;
+          nearestDistance +
+          "
+" +
+          "Hauteur médiane : " +
+          formatHeightStat(result.heightStats.median) +
+          " m
+" +
+          "Hauteur moyenne : " +
+          formatHeightStat(result.heightStats.mean) +
+          " m
+" +
+          "Hauteur min : " +
+          formatHeightStat(result.heightStats.min) +
+          " m
+" +
+          "Hauteur max : " +
+          formatHeightStat(result.heightStats.max) +
+          " m
+" +
+          "Hauteur écart-type : " +
+          formatHeightStat(result.heightStats.stdDev) +
+          " m";
       }
 
       function renderNearestTable(nearestThree) {
