@@ -428,6 +428,19 @@
               />
             </div>
 
+            <div class="field">
+              <label for="maxHeightInput">
+                Hauteur maximale du support affiché (m)
+              </label>
+              <input
+                type="number"
+                id="maxHeightInput"
+                value="9999"
+                min="0"
+                step="0.1"
+              />
+            </div>
+
             <div class="row">
               <button id="useSearchedAddressBtn" disabled>
                 Utiliser l’adresse recherchée comme point d’analyse
@@ -594,6 +607,7 @@
       const maxRadiusInput = document.getElementById("maxRadiusInput");
       const stepInput = document.getElementById("stepInput");
       const minHeightInput = document.getElementById("minHeightInput");
+      const maxHeightInput = document.getElementById("maxHeightInput");
 
       const fileInfoBox = document.getElementById("fileInfoBox");
       const leftStatusBox = document.getElementById("leftStatusBox");
@@ -1246,6 +1260,7 @@
         const maxRadius = Number(maxRadiusInput.value);
         const step = Number(stepInput.value);
         const minHeight = Number(minHeightInput.value);
+        const maxHeight = Number(maxHeightInput.value);
 
         if (!Number.isFinite(maxRadius) || maxRadius <= 0) {
           throw new Error(
@@ -1271,14 +1286,27 @@
           );
         }
 
+        if (!Number.isFinite(maxHeight) || maxHeight < 0) {
+          throw new Error(
+            "La hauteur maximale doit être un nombre positif ou nul."
+          );
+        }
+
+        if (maxHeight < minHeight) {
+          throw new Error(
+            "La hauteur maximale doit être supérieure ou égale à la hauteur minimale."
+          );
+        }
+
         return {
           maxRadius,
           step,
-          minHeight
+          minHeight,
+          maxHeight
         };
       }
 
-      function analyzeAroundPoint(lon0, lat0, maxRadius, step, minHeight) {
+      function analyzeAroundPoint(lon0, lat0, maxRadius, step, minHeight, maxHeight) {
         const ringCounts = new Map();
         const allDistances = [];
         const supportsInRadius = [];
@@ -1298,15 +1326,19 @@
           }
 
           const heightKnown = pt.supportHeight !== null;
+          const heightTooLow = heightKnown && pt.supportHeight < minHeight;
+          const heightTooHigh = heightKnown && pt.supportHeight > maxHeight;
+
           const heightOk =
-            minHeight <= 0 ||
-            (heightKnown && pt.supportHeight >= minHeight);
+            heightKnown &&
+            !heightTooLow &&
+            !heightTooHigh;
 
           if (inRadius && !heightOk) {
-            if (heightKnown) {
-              supportsExcludedByHeight++;
-            } else {
+            if (!heightKnown) {
               supportsExcludedByUnknownHeight++;
+            } else {
+              supportsExcludedByHeight++;
             }
           }
 
@@ -1373,6 +1405,7 @@
           maxRadius,
           step,
           minHeight,
+          maxHeight,
           totalInRadiusBeforeHeightFilter,
           totalInRadius,
           supportsExcludedByHeight,
@@ -1407,15 +1440,18 @@
           " m\n" +
           "Hauteur min.  : " +
           result.minHeight +
+          " m\n" +
+          "Hauteur max.  : " +
+          result.maxHeight +
           " m\n\n" +
           "Résultat\n" +
           "Supports dans le rayon avant filtre hauteur : " +
           result.totalInRadiusBeforeHeightFilter +
           "\n" +
-          "Supports dans le rayon après filtre hauteur : " +
+          "Supports dans le rayon dans l’intervalle de hauteur : " +
           result.totalInRadius +
           "\n" +
-          "Supports exclus car trop bas : " +
+          "Supports exclus car hors intervalle de hauteur : " +
           result.supportsExcludedByHeight +
           "\n" +
           "Supports exclus car hauteur inconnue : " +
@@ -1471,10 +1507,10 @@
 
         if (!rings || rings.length === 0) {
           ringsInfoBox.textContent =
-            "Aucune couronne non vide dans le rayon demandé après filtre hauteur.\n" +
+            "Aucune couronne non vide dans le rayon demandé dans l’intervalle de hauteur.\n" +
             "Nombre total de supports à moins de " +
             result.maxRadius +
-            " m après filtre hauteur : " +
+            " m dans l’intervalle de hauteur : " +
             result.totalInRadius;
 
           ringsTableBody.innerHTML =
@@ -1488,7 +1524,7 @@
           "\n" +
           "Nombre total de supports à moins de " +
           result.maxRadius +
-          " m après filtre hauteur : " +
+          " m dans l’intervalle de hauteur : " +
           result.totalInRadius;
 
         ringsTableBody.innerHTML = rings
@@ -1510,8 +1546,8 @@
 
         rightStatusBox.textContent =
           result.totalInRadius > 0
-            ? "Analyse terminée. Les supports dans le cercle respectant la hauteur minimale sont affichés sur la carte."
-            : "Analyse terminée. Aucun support dans le rayon demandé après filtre hauteur.";
+            ? "Analyse terminée. Les supports dans le cercle respectant l’intervalle de hauteur sont affichés sur la carte."
+            : "Analyse terminée. Aucun support dans le rayon demandé dans l’intervalle de hauteur.";
 
         updateSupportsInRadiusLayer(result.supportsInRadius);
       }
@@ -1562,7 +1598,7 @@
         const lines = [];
 
         lines.push(
-          "lon_point;lat_point;rayon_max_m;pas_m;hauteur_min_m;couronne_debut_m;couronne_fin_m;nb_supports"
+          "lon_point;lat_point;rayon_max_m;pas_m;hauteur_min_m;hauteur_max_m;couronne_debut_m;couronne_fin_m;nb_supports"
         );
 
         for (const ring of result.rings) {
@@ -1573,6 +1609,7 @@
               result.maxRadius,
               result.step,
               result.minHeight,
+              result.maxHeight,
               ring.from,
               ring.to,
               ring.count
@@ -1807,7 +1844,8 @@
             clickedPoint.lat,
             params.maxRadius,
             params.step,
-            params.minHeight
+            params.minHeight,
+            params.maxHeight
           );
 
           renderAnalysisResult(analysisResult);
@@ -1879,6 +1917,15 @@
           resetAnalysisOutputs();
           leftStatusBox.textContent =
             "Hauteur minimale modifiée. Relancez l’analyse.";
+        }
+      });
+
+      maxHeightInput.addEventListener("input", function () {
+        if (analysisResult) {
+          clearSupportsInRadiusLayer();
+          resetAnalysisOutputs();
+          leftStatusBox.textContent =
+            "Hauteur maximale modifiée. Relancez l’analyse.";
         }
       });
 
