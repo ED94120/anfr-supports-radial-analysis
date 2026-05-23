@@ -660,6 +660,31 @@
         return value === null || value === undefined ? "-" : value.toFixed(2);
       }
 
+      function computePercentile(sortedValues, percentile) {
+        if (!Array.isArray(sortedValues) || sortedValues.length === 0) {
+          return null;
+        }
+
+        if (sortedValues.length === 1) {
+          return sortedValues[0];
+        }
+
+        const p = Math.min(100, Math.max(0, percentile));
+        const index = (p / 100) * (sortedValues.length - 1);
+        const lowerIndex = Math.floor(index);
+        const upperIndex = Math.ceil(index);
+        const fraction = index - lowerIndex;
+
+        if (lowerIndex === upperIndex) {
+          return sortedValues[lowerIndex];
+        }
+
+        return (
+          sortedValues[lowerIndex] +
+          (sortedValues[upperIndex] - sortedValues[lowerIndex]) * fraction
+        );
+      }
+
       function computeHeightStats(items) {
         const heights = items
           .map((item) => item.supportHeight)
@@ -672,6 +697,8 @@
             mean: null,
             min: null,
             max: null,
+            p5: null,
+            p95: null,
             stdDev: null
           };
         }
@@ -679,11 +706,9 @@
         const n = heights.length;
         const sum = heights.reduce((acc, h) => acc + h, 0);
         const mean = sum / n;
-
-        const median =
-          n % 2 === 1
-            ? heights[(n - 1) / 2]
-            : (heights[n / 2 - 1] + heights[n / 2]) / 2;
+        const median = computePercentile(heights, 50);
+        const p5 = computePercentile(heights, 5);
+        const p95 = computePercentile(heights, 95);
 
         const variance =
           heights.reduce((acc, h) => acc + Math.pow(h - mean, 2), 0) / n;
@@ -693,6 +718,8 @@
           mean,
           min: heights[0],
           max: heights[n - 1],
+          p5,
+          p95,
           stdDev: Math.sqrt(variance)
         };
       }
@@ -1474,6 +1501,12 @@
           " m\n" +
           "Hauteur max : " +
           formatHeightStat(result.heightStats.max) +
+          " m\n" +
+          "Hauteur P5 : " +
+          formatHeightStat(result.heightStats.p5) +
+          " m\n" +
+          "Hauteur P95 : " +
+          formatHeightStat(result.heightStats.p95) +
           " m\n" +
           "Hauteur écart-type : " +
           formatHeightStat(result.heightStats.stdDev) +
